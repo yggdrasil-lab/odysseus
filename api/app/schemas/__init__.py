@@ -1,5 +1,30 @@
 """Pydantic schemas package for Odysseus API."""
 
+from app.schemas.bookings import (
+    AttachmentRead,
+    BookingCreate,
+    BookingRead,
+    BookingSegmentCreate,
+    BookingSegmentRead,
+    BookingStatus,
+    BookingType,
+    BookingUpdate,
+)
+from app.schemas.places import (
+    DayRoutesComputeRequest,
+    DayRoutesComputeResponse,
+    PlaceCategory,
+    PlaceCreate,
+    PlaceRead,
+    PlaceSearchCandidateRead,
+    PlaceUpdate,
+    ResolveUrlRequest,
+    ResolveUrlResponse,
+    RouteEstimateRead,
+    RouteEstimateUpdate,
+    RouteSource,
+    TravelMode,
+)
 from app.schemas.planning import (
     ChecklistCreate,
     ChecklistItemCreate,
@@ -32,6 +57,14 @@ from app.schemas.trips import (
 )
 
 __all__ = [
+    "AttachmentRead",
+    "BookingCreate",
+    "BookingRead",
+    "BookingSegmentCreate",
+    "BookingSegmentRead",
+    "BookingStatus",
+    "BookingType",
+    "BookingUpdate",
     "ChecklistCreate",
     "ChecklistItemCreate",
     "ChecklistItemRead",
@@ -41,6 +74,8 @@ __all__ = [
     "ChecklistUpdate",
     "DayCreate",
     "DayRead",
+    "DayRoutesComputeRequest",
+    "DayRoutesComputeResponse",
     "DayUpdate",
     "ItemCategory",
     "ItemStatus",
@@ -50,6 +85,17 @@ __all__ = [
     "LegCreate",
     "LegRead",
     "LegUpdate",
+    "PlaceCategory",
+    "PlaceCreate",
+    "PlaceRead",
+    "PlaceSearchCandidateRead",
+    "PlaceUpdate",
+    "ResolveUrlRequest",
+    "ResolveUrlResponse",
+    "RouteEstimateRead",
+    "RouteEstimateUpdate",
+    "RouteSource",
+    "TravelMode",
     "TravelNoteCreate",
     "TravelNoteRead",
     "TravelNoteUpdate",

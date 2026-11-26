@@ -1,11 +1,16 @@
 import type { OdysseusApiAdapter } from '../api/client'
 import type {
+  BookingCreatePayload,
+  BookingUpdatePayload,
   ChecklistCreatePayload,
   ChecklistItem,
   ChecklistItemCreatePayload,
   ItineraryItemCreatePayload,
   ItineraryItemUpdatePayload,
   LegCreatePayload,
+  PlaceCreatePayload,
+  PlaceUpdatePayload,
+  RouteEstimateUpdatePayload,
   TravelNoteCreatePayload,
   TripCreatePayload,
 } from '../types'
@@ -17,12 +22,7 @@ interface ActionHelpers {
   onActionError: (err: unknown) => void
 }
 
-export function buildWorkspaceActions({
-  adapter,
-  runMutation,
-  onTripCreated,
-  onActionError,
-}: ActionHelpers) {
+function buildCoreActions({ adapter, runMutation, onTripCreated, onActionError }: ActionHelpers) {
   return {
     createTrip: async (payload: TripCreatePayload) => {
       try {
@@ -33,47 +33,38 @@ export function buildWorkspaceActions({
         throw err
       }
     },
-    createLeg: (payload: LegCreatePayload) =>
-      runMutation(async (tripId) => {
-        await adapter.createLeg(tripId, payload)
-      }),
-    createItem: (payload: ItineraryItemCreatePayload) =>
-      runMutation(async (tripId) => {
-        await adapter.createItineraryItem(tripId, payload)
-      }),
-    updateItem: (itemId: string, payload: ItineraryItemUpdatePayload) =>
-      runMutation(async (tripId) => {
-        await adapter.updateItineraryItem(tripId, itemId, payload)
-      }),
-    deleteItem: (itemId: string) =>
-      runMutation(async (tripId) => {
-        await adapter.deleteItineraryItem(tripId, itemId)
-      }),
-    createChecklist: (payload: ChecklistCreatePayload) =>
-      runMutation(async (tripId) => {
-        await adapter.createChecklist(tripId, payload)
-      }),
-    addChecklistItem: (checklistId: string, payload: ChecklistItemCreatePayload) =>
-      runMutation(async (tripId) => {
-        await adapter.createChecklistItem(tripId, checklistId, payload)
-      }),
+    createLeg: (payload: LegCreatePayload) => runMutation((id) => adapter.createLeg(id, payload).then(() => undefined)),
+    createItem: (payload: ItineraryItemCreatePayload) => runMutation((id) => adapter.createItineraryItem(id, payload).then(() => undefined)),
+    updateItem: (itemId: string, payload: ItineraryItemUpdatePayload) => runMutation((id) => adapter.updateItineraryItem(id, itemId, payload).then(() => undefined)),
+    deleteItem: (itemId: string) => runMutation((id) => adapter.deleteItineraryItem(id, itemId)),
+    createChecklist: (payload: ChecklistCreatePayload) => runMutation((id) => adapter.createChecklist(id, payload).then(() => undefined)),
+    addChecklistItem: (checklistId: string, payload: ChecklistItemCreatePayload) => runMutation((id) => adapter.createChecklistItem(id, checklistId, payload).then(() => undefined)),
     toggleChecklistItem: (checklistId: string, item: ChecklistItem) =>
-      runMutation(async (tripId) => {
-        await adapter.updateChecklistItem(tripId, checklistId, item.id, {
-          is_completed: !item.is_completed,
-        })
-      }),
-    deleteChecklistItem: (checklistId: string, itemId: string) =>
-      runMutation(async (tripId) => {
-        await adapter.deleteChecklistItem(tripId, checklistId, itemId)
-      }),
-    createNote: (payload: TravelNoteCreatePayload) =>
-      runMutation(async (tripId) => {
-        await adapter.createNote(tripId, payload)
-      }),
-    deleteNote: (noteId: string) =>
-      runMutation(async (tripId) => {
-        await adapter.deleteNote(tripId, noteId)
-      }),
+      runMutation((id) => adapter.updateChecklistItem(id, checklistId, item.id, { is_completed: !item.is_completed }).then(() => undefined)),
+    deleteChecklistItem: (checklistId: string, itemId: string) => runMutation((id) => adapter.deleteChecklistItem(id, checklistId, itemId)),
+    createNote: (payload: TravelNoteCreatePayload) => runMutation((id) => adapter.createNote(id, payload).then(() => undefined)),
+    deleteNote: (noteId: string) => runMutation((id) => adapter.deleteNote(id, noteId)),
+  }
+}
+
+function buildBookingsAndPlacesActions({ adapter, runMutation }: Pick<ActionHelpers, 'adapter' | 'runMutation'>) {
+  return {
+    createBooking: (payload: BookingCreatePayload) => runMutation((id) => adapter.createBooking(id, payload).then(() => undefined)),
+    updateBooking: (bookingId: string, payload: BookingUpdatePayload) => runMutation((id) => adapter.updateBooking(id, bookingId, payload).then(() => undefined)),
+    deleteBooking: (bookingId: string) => runMutation((id) => adapter.deleteBooking(id, bookingId)),
+    uploadAttachment: (file: File, bookingId?: string | null) => runMutation((id) => adapter.uploadAttachment(id, file, bookingId).then(() => undefined)),
+    deleteAttachment: (attachmentId: string) => runMutation((id) => adapter.deleteAttachment(id, attachmentId)),
+    createPlace: (payload: PlaceCreatePayload) => runMutation((id) => adapter.createPlace(id, payload).then(() => undefined)),
+    updatePlace: (placeId: string, payload: PlaceUpdatePayload) => runMutation((id) => adapter.updatePlace(id, placeId, payload).then(() => undefined)),
+    deletePlace: (placeId: string) => runMutation((id) => adapter.deletePlace(id, placeId)),
+    updateRouteEstimate: (routeId: string, payload: RouteEstimateUpdatePayload) =>
+      runMutation((id) => adapter.updateRouteEstimate(id, routeId, payload).then(() => undefined)),
+  }
+}
+
+export function buildWorkspaceActions(helpers: ActionHelpers) {
+  return {
+    ...buildCoreActions(helpers),
+    ...buildBookingsAndPlacesActions(helpers),
   }
 }

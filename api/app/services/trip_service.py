@@ -4,11 +4,22 @@ import uuid
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, defer, selectinload
 
 from app.domain.errors import DomainConflictError
 from app.domain.timezones import validate_iana_timezone, validate_slug, validate_trip_dates
-from app.models import Checklist, Day, ItineraryItem, Leg, TravelNote, Trip
+from app.models import (
+    Attachment,
+    Booking,
+    Checklist,
+    Day,
+    ItineraryItem,
+    Leg,
+    Place,
+    RouteEstimate,
+    TravelNote,
+    Trip,
+)
 from app.schemas import TripCreate, TripUpdate, TripWorkspaceRead
 from app.services.day_provisioning import provision_days_for_range
 from app.services.ownership import reject_explicit_nulls, require_trip
@@ -99,6 +110,41 @@ def delete_trip(db: Session, trip_id: uuid.UUID) -> None:
     db.commit()
 
 
+def _load_trip_logistics(
+    db: Session,
+    trip_id: uuid.UUID,
+) -> tuple[list[Booking], list[Attachment], list[Place], list[RouteEstimate]]:
+    bookings = list(
+        db.scalars(
+            select(Booking)
+            .where(Booking.trip_id == trip_id)
+            .options(selectinload(Booking.segments))
+            .order_by(Booking.sort_order, Booking.created_at)
+        )
+    )
+    attachments = list(
+        db.scalars(
+            select(Attachment)
+            .where(Attachment.trip_id == trip_id)
+            .options(defer(Attachment.content_bytes))
+            .order_by(Attachment.created_at.desc())
+        )
+    )
+    places = list(
+        db.scalars(
+            select(Place).where(Place.trip_id == trip_id).order_by(Place.created_at)
+        )
+    )
+    route_estimates = list(
+        db.scalars(
+            select(RouteEstimate)
+            .where(RouteEstimate.trip_id == trip_id)
+            .order_by(RouteEstimate.created_at)
+        )
+    )
+    return bookings, attachments, places, route_estimates
+
+
 def get_trip_workspace(db: Session, trip_id: uuid.UUID) -> TripWorkspaceRead:
     """Hydrate complete trip document workspace in one query batch."""
     trip = require_trip(db, trip_id)
@@ -132,6 +178,7 @@ def get_trip_workspace(db: Session, trip_id: uuid.UUID) -> TripWorkspaceRead:
             .order_by(TravelNote.sort_order, TravelNote.created_at)
         )
     )
+    bookings, attachments, places, route_estimates = _load_trip_logistics(db, trip_id)
     return TripWorkspaceRead.model_validate(
         {
             "trip": trip,
@@ -140,5 +187,9 @@ def get_trip_workspace(db: Session, trip_id: uuid.UUID) -> TripWorkspaceRead:
             "itinerary_items": itinerary_items,
             "checklists": checklists,
             "travel_notes": travel_notes,
+            "bookings": bookings,
+            "attachments": attachments,
+            "places": places,
+            "route_estimates": route_estimates,
         }
     )

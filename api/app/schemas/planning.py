@@ -6,6 +6,8 @@ import uuid
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.bookings import AttachmentRead, BookingRead
+from app.schemas.places import PlaceRead, RouteEstimateRead
 from app.schemas.trips import DayRead, LegRead, TripRead
 
 ItemCategory = Literal["activity", "food", "transit", "lodging", "flight", "other"]
@@ -27,6 +29,7 @@ class ItineraryItemCreate(BaseModel):
     end_local: datetime | None = None
     end_tz: str | None = Field(default=None, max_length=64)
     place_label: str | None = Field(default=None, max_length=200)
+    place_id: uuid.UUID | None = None
     sync_to_chronos: bool = False
     sort_order: int = 0
     notes: str | None = None
@@ -46,6 +49,7 @@ class ItineraryItemUpdate(BaseModel):
     end_local: datetime | None = None
     end_tz: str | None = Field(default=None, max_length=64)
     place_label: str | None = Field(default=None, max_length=200)
+    place_id: uuid.UUID | None = None
     sync_to_chronos: bool | None = None
     sort_order: int | None = None
     notes: str | None = None
@@ -69,6 +73,7 @@ class ItineraryItemRead(BaseModel):
     start_utc: datetime | None
     end_utc: datetime | None
     place_label: str | None
+    place_id: uuid.UUID | None
     sync_to_chronos: bool
     sort_order: int
     notes: str | None
@@ -208,3 +213,7 @@ class TripWorkspaceRead(BaseModel):
     itinerary_items: list[ItineraryItemRead]
     checklists: list[ChecklistRead]
     travel_notes: list[TravelNoteRead]
+    bookings: list[BookingRead]
+    attachments: list[AttachmentRead]
+    places: list[PlaceRead]
+    route_estimates: list[RouteEstimateRead]

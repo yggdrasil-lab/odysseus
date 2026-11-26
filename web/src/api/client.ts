@@ -1,16 +1,29 @@
 import { SessionExpiredError, isSessionExpiredResponse } from '@yggdrasil-lab/ui'
 
 import type {
+  Attachment,
+  Booking,
+  BookingCreatePayload,
+  BookingUpdatePayload,
   Checklist,
   ChecklistCreatePayload,
   ChecklistItem,
   ChecklistItemCreatePayload,
   ChecklistItemUpdatePayload,
+  DayRoutesComputeResponse,
   ItineraryItem,
   ItineraryItemCreatePayload,
   ItineraryItemUpdatePayload,
   Leg,
   LegCreatePayload,
+  Place,
+  PlaceCreatePayload,
+  PlaceSearchCandidate,
+  PlaceUpdatePayload,
+  ResolvePlaceUrlResponse,
+  RouteEstimate,
+  RouteEstimateUpdatePayload,
+  TravelMode,
   TravelNote,
   TravelNoteCreatePayload,
   Trip,
@@ -79,6 +92,27 @@ export interface OdysseusApiAdapter {
   deleteChecklistItem(tripId: string, checklistId: string, itemId: string): Promise<void>
   createNote(tripId: string, payload: TravelNoteCreatePayload): Promise<TravelNote>
   deleteNote(tripId: string, noteId: string): Promise<void>
+  createBooking(tripId: string, payload: BookingCreatePayload): Promise<Booking>
+  updateBooking(tripId: string, bookingId: string, payload: BookingUpdatePayload): Promise<Booking>
+  deleteBooking(tripId: string, bookingId: string): Promise<void>
+  uploadAttachment(tripId: string, file: File, bookingId?: string | null): Promise<Attachment>
+  deleteAttachment(tripId: string, attachmentId: string): Promise<void>
+  attachmentContentUrl(tripId: string, attachmentId: string): string
+  createPlace(tripId: string, payload: PlaceCreatePayload): Promise<Place>
+  updatePlace(tripId: string, placeId: string, payload: PlaceUpdatePayload): Promise<Place>
+  deletePlace(tripId: string, placeId: string): Promise<void>
+  searchPlaces(tripId: string, query: string): Promise<PlaceSearchCandidate[]>
+  resolvePlaceUrl(tripId: string, url: string): Promise<ResolvePlaceUrlResponse>
+  computeDayRoutes(
+    tripId: string,
+    dayId: string,
+    travelMode: TravelMode,
+  ): Promise<DayRoutesComputeResponse>
+  updateRouteEstimate(
+    tripId: string,
+    routeId: string,
+    payload: RouteEstimateUpdatePayload,
+  ): Promise<RouteEstimate>
 }
 
 function isAuthentikGateResponse(response: Response): boolean {
@@ -118,10 +152,14 @@ export class OdysseusHttpAdapter implements OdysseusApiAdapter {
   }
 
   private async request<T>(path: string, init?: RequestInit): Promise<T> {
+    const isMultipart = init?.body instanceof FormData
+    const headers: HeadersInit = isMultipart
+      ? { ...(init?.headers ?? {}) }
+      : { 'Content-Type': 'application/json', ...(init?.headers ?? {}) }
     const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
       cache: 'no-store',
-      headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
       ...init,
+      headers,
     })
 
     if (isAuthentikGateResponse(response)) {
@@ -254,6 +292,106 @@ export class OdysseusHttpAdapter implements OdysseusApiAdapter {
   deleteNote(tripId: string, noteId: string): Promise<void> {
     return this.request<void>(`/trips/${tripId}/notes/${noteId}`, {
       method: 'DELETE',
+    })
+  }
+
+  createBooking(tripId: string, payload: BookingCreatePayload): Promise<Booking> {
+    return this.request<Booking>(`/trips/${tripId}/bookings`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+  }
+
+  updateBooking(
+    tripId: string,
+    bookingId: string,
+    payload: BookingUpdatePayload,
+  ): Promise<Booking> {
+    return this.request<Booking>(`/trips/${tripId}/bookings/${bookingId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    })
+  }
+
+  deleteBooking(tripId: string, bookingId: string): Promise<void> {
+    return this.request<void>(`/trips/${tripId}/bookings/${bookingId}`, {
+      method: 'DELETE',
+    })
+  }
+
+  uploadAttachment(tripId: string, file: File, bookingId?: string | null): Promise<Attachment> {
+    const formData = new FormData()
+    formData.append('file', file)
+    if (bookingId) {
+      formData.append('booking_id', bookingId)
+    }
+    return this.request<Attachment>(`/trips/${tripId}/attachments`, {
+      method: 'POST',
+      body: formData,
+    })
+  }
+
+  deleteAttachment(tripId: string, attachmentId: string): Promise<void> {
+    return this.request<void>(`/trips/${tripId}/attachments/${attachmentId}`, {
+      method: 'DELETE',
+    })
+  }
+
+  attachmentContentUrl(tripId: string, attachmentId: string): string {
+    return `${this.baseUrl}/trips/${tripId}/attachments/${attachmentId}/content`
+  }
+
+  createPlace(tripId: string, payload: PlaceCreatePayload): Promise<Place> {
+    return this.request<Place>(`/trips/${tripId}/places`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+  }
+
+  updatePlace(tripId: string, placeId: string, payload: PlaceUpdatePayload): Promise<Place> {
+    return this.request<Place>(`/trips/${tripId}/places/${placeId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    })
+  }
+
+  deletePlace(tripId: string, placeId: string): Promise<void> {
+    return this.request<void>(`/trips/${tripId}/places/${placeId}`, {
+      method: 'DELETE',
+    })
+  }
+
+  searchPlaces(tripId: string, query: string): Promise<PlaceSearchCandidate[]> {
+    const encoded = encodeURIComponent(query)
+    return this.request<PlaceSearchCandidate[]>(`/trips/${tripId}/places/search?q=${encoded}`)
+  }
+
+  resolvePlaceUrl(tripId: string, url: string): Promise<ResolvePlaceUrlResponse> {
+    return this.request<ResolvePlaceUrlResponse>(`/trips/${tripId}/places/resolve-url`, {
+      method: 'POST',
+      body: JSON.stringify({ url }),
+    })
+  }
+
+  computeDayRoutes(
+    tripId: string,
+    dayId: string,
+    travelMode: TravelMode,
+  ): Promise<DayRoutesComputeResponse> {
+    return this.request<DayRoutesComputeResponse>(`/trips/${tripId}/days/${dayId}/routes/compute`, {
+      method: 'POST',
+      body: JSON.stringify({ travel_mode: travelMode }),
+    })
+  }
+
+  updateRouteEstimate(
+    tripId: string,
+    routeId: string,
+    payload: RouteEstimateUpdatePayload,
+  ): Promise<RouteEstimate> {
+    return this.request<RouteEstimate>(`/trips/${tripId}/routes/${routeId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
     })
   }
 }
