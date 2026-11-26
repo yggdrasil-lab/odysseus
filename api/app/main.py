@@ -1,10 +1,12 @@
 """FastAPI application entrypoint for Odysseus API."""
 
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, FastAPI, Request, status
+from fastapi.responses import JSONResponse
 
 from app.config import Settings, settings
+from app.domain.errors import DomainConflictError, DomainNotFoundError, DomainValidationError
 from app.middleware import McpAuthMiddleware, NoCacheMiddleware
-from app.routers import health
+from app.routers import checklists, health, itinerary, notes, trips
 
 mcp_router = APIRouter(prefix="/mcp", tags=["MCP"])
 
@@ -22,11 +24,33 @@ def mcp_ping() -> dict[str, str]:
     return {"status": "ok", "service": "odysseus-mcp"}
 
 
+def _register_domain_handlers(application: FastAPI) -> None:
+    @application.exception_handler(DomainNotFoundError)
+    async def _handle_not_found(_request: Request, exc: DomainNotFoundError) -> JSONResponse:
+        return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"detail": str(exc)})
+
+    @application.exception_handler(DomainConflictError)
+    async def _handle_conflict(_request: Request, exc: DomainConflictError) -> JSONResponse:
+        return JSONResponse(status_code=status.HTTP_409_CONFLICT, content={"detail": str(exc)})
+
+    @application.exception_handler(DomainValidationError)
+    async def _handle_validation(_request: Request, exc: DomainValidationError) -> JSONResponse:
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            content={"detail": str(exc)},
+        )
+
+
 def create_app(app_settings: Settings | None = None) -> FastAPI:
     """Build and configure the Odysseus FastAPI application."""
     resolved_settings = app_settings or settings
     application = FastAPI(title="Odysseus API", version="0.1.0")
+    _register_domain_handlers(application)
     application.include_router(health.router)
+    application.include_router(trips.router)
+    application.include_router(itinerary.router)
+    application.include_router(checklists.router)
+    application.include_router(notes.router)
     application.include_router(mcp_router)
     application.add_middleware(
         McpAuthMiddleware,
