@@ -28,7 +28,7 @@ export const BudgetPlaceholderCard: React.FC<BudgetPlaceholderCardProps> = ({ bu
       subtitle="Target NZD cap and multi-currency expense rollup"
       icon={<Wallet className="w-4 h-4" />}
       variant="amber"
-      actions={<StatusBadge label="Ticket 07" variant="warning" size="xs" />}
+      actions={<StatusBadge label="Ticket 08" variant="warning" size="xs" />}
     />
     <div className="flex items-center justify-between rounded-ui-control bg-background/60 border border-border/80 px-3 py-2.5 text-xs">
       <span className="text-muted">Configured Trip Budget</span>
@@ -37,7 +37,7 @@ export const BudgetPlaceholderCard: React.FC<BudgetPlaceholderCardProps> = ({ bu
       </span>
     </div>
     <p className="text-xs text-muted leading-relaxed">
-      Live Plutus multi-currency transaction tagging and burn-rate charts arrive in Ticket 07.
+      Live Plutus multi-currency transaction tagging and burn-rate charts arrive in Ticket 08.
     </p>
   </GlassCard>
 )

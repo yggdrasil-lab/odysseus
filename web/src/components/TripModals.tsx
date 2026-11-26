@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
-import { Button, FormField, Modal, SelectInput, TextArea, TextInput } from '@yggdrasil-lab/ui'
+import { AlertBanner, Button, FormField, Modal, SelectInput, TextArea, TextInput } from '@yggdrasil-lab/ui'
 
-import { createTripSlug } from '../api/client'
+import { OdysseusApiError, createTripSlug } from '../api/client'
 import type {
   ChecklistCreatePayload,
   ChecklistType,
@@ -15,6 +15,18 @@ import type {
   TripCreatePayload,
   TripStatus,
 } from '../types'
+
+function extractModalError(err: unknown): string {
+  if (err instanceof OdysseusApiError) return err.detail
+  return err instanceof Error ? err.message : 'Unable to save changes'
+}
+
+const ModalErrorAlert: React.FC<{ message: string | null }> = ({ message }) =>
+  message ? (
+    <AlertBanner variant="error" title="Save failed">
+      {message}
+    </AlertBanner>
+  ) : null
 
 const ModalActions: React.FC<{
   onClose: () => void
@@ -60,31 +72,29 @@ export const CreateTripModal: React.FC<{
   const [homeTimezone, setHomeTimezone] = useState('Pacific/Auckland')
   const [summary, setSummary] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+
+  useEffect(() => { if (isOpen) setErrorMessage(null) }, [isOpen])
 
   const handleSave = async (event: React.FormEvent) => {
     event.preventDefault()
     if (!title.trim()) return
-    setSubmitting(true)
+    setSubmitting(true); setErrorMessage(null)
     try {
       await onSubmit({
-        title: title.trim(),
-        slug: slug.trim() || createTripSlug(title),
-        status,
-        start_date: startDate || null,
-        end_date: endDate || null,
-        home_timezone: homeTimezone.trim() || 'Pacific/Auckland',
-        summary: summary.trim() || null,
+        title: title.trim(), slug: slug.trim() || createTripSlug(title), status,
+        start_date: startDate || null, end_date: endDate || null,
+        home_timezone: homeTimezone.trim() || 'Pacific/Auckland', summary: summary.trim() || null,
       })
       setTitle(''); setSlug(''); setStartDate(''); setEndDate(''); setSummary('')
       onClose()
-    } finally {
-      setSubmitting(false)
-    }
+    } catch (err: unknown) { setErrorMessage(extractModalError(err)) } finally { setSubmitting(false) }
   }
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Create Trip">
       <form onSubmit={(e) => void handleSave(e)} className="space-y-3">
+        <ModalErrorAlert message={errorMessage} />
         <FormField label="Trip Title" htmlFor="trip-title" required>
           <TextInput id="trip-title" variant="brand" required value={title} onChange={(e) => { setTitle(e.target.value); setSlug(createTripSlug(e.target.value)) }} placeholder="Pacific Explorer" />
         </FormField>
@@ -121,23 +131,25 @@ export const CreateLegModal: React.FC<{
   const [endDate, setEndDate] = useState('')
   const [color, setColor] = useState('#38bdf8')
   const [submitting, setSubmitting] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+
+  useEffect(() => { if (isOpen) setErrorMessage(null) }, [isOpen])
 
   const handleSave = async (event: React.FormEvent) => {
     event.preventDefault()
     if (!name.trim() || !primaryCity.trim() || !startDate || !endDate) return
-    setSubmitting(true)
+    setSubmitting(true); setErrorMessage(null)
     try {
       await onSubmit({ name: name.trim(), primary_city: primaryCity.trim(), base_timezone: baseTimezone.trim(), start_date: startDate, end_date: endDate, color })
       setName(''); setPrimaryCity('')
       onClose()
-    } finally {
-      setSubmitting(false)
-    }
+    } catch (err: unknown) { setErrorMessage(extractModalError(err)) } finally { setSubmitting(false) }
   }
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Add Destination Leg">
       <form onSubmit={(e) => void handleSave(e)} className="space-y-3">
+        <ModalErrorAlert message={errorMessage} />
         <FormField label="Leg Name" htmlFor="leg-name" required>
           <TextInput id="leg-name" variant="brand" required value={name} onChange={(e) => setName(e.target.value)} placeholder="Harbor City" />
         </FormField>
@@ -212,35 +224,32 @@ export const CreateItemModal: React.FC<{
   const [startTz, setStartTz] = useState(defaultTimezone)
   const [placeLabel, setPlaceLabel] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
-  useEffect(() => { setDayId(defaultDayId ?? '') }, [defaultDayId, isOpen])
+  useEffect(() => { setDayId(defaultDayId ?? ''); if (isOpen) setErrorMessage(null) }, [defaultDayId, isOpen])
   useEffect(() => { setStartTz(defaultTimezone) }, [defaultTimezone])
 
   const handleSave = async (event: React.FormEvent) => {
     event.preventDefault()
     if (!title.trim()) return
-    setSubmitting(true)
+    setSubmitting(true); setErrorMessage(null)
     try {
       const normalized = startLocal.trim()
       await onSubmit({
-        day_id: dayId || null,
-        title: title.trim(),
-        category,
-        status: itemStatus,
+        day_id: dayId || null, title: title.trim(), category, status: itemStatus,
         start_local: normalized ? (normalized.length === 16 ? `${normalized}:00` : normalized) : null,
         start_tz: normalized ? startTz.trim() || defaultTimezone : null,
         place_label: placeLabel.trim() || null,
       })
       setTitle(''); setStartLocal(''); setPlaceLabel('')
       onClose()
-    } finally {
-      setSubmitting(false)
-    }
+    } catch (err: unknown) { setErrorMessage(extractModalError(err)) } finally { setSubmitting(false) }
   }
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Add Itinerary Item">
       <form onSubmit={(e) => void handleSave(e)} className="space-y-3">
+        <ModalErrorAlert message={errorMessage} />
         <FormField label="Activity Title" htmlFor="item-title" required>
           <TextInput id="item-title" variant="brand" required value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Morning Harbor Ferry" />
         </FormField>
@@ -265,23 +274,25 @@ export const CreateChecklistModal: React.FC<{
   const [title, setTitle] = useState('')
   const [listType, setListType] = useState<ChecklistType>('packing')
   const [submitting, setSubmitting] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+
+  useEffect(() => { if (isOpen) setErrorMessage(null) }, [isOpen])
 
   const handleSave = async (event: React.FormEvent) => {
     event.preventDefault()
     if (!title.trim()) return
-    setSubmitting(true)
+    setSubmitting(true); setErrorMessage(null)
     try {
       await onSubmit({ title: title.trim(), list_type: listType })
       setTitle('')
       onClose()
-    } finally {
-      setSubmitting(false)
-    }
+    } catch (err: unknown) { setErrorMessage(extractModalError(err)) } finally { setSubmitting(false) }
   }
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Create Checklist">
       <form onSubmit={(e) => void handleSave(e)} className="space-y-3">
+        <ModalErrorAlert message={errorMessage} />
         <FormField label="Checklist Title" htmlFor="checklist-title" required>
           <TextInput id="checklist-title" variant="brand" required value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Carry-on Essentials" />
         </FormField>
@@ -305,23 +316,25 @@ export const CreateNoteModal: React.FC<{
   const [legId, setLegId] = useState('')
   const [isPrivate, setIsPrivate] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+
+  useEffect(() => { if (isOpen) setErrorMessage(null) }, [isOpen])
 
   const handleSave = async (event: React.FormEvent) => {
     event.preventDefault()
     if (!title.trim() || !body.trim()) return
-    setSubmitting(true)
+    setSubmitting(true); setErrorMessage(null)
     try {
       await onSubmit({ title: title.trim(), body: body.trim(), leg_id: legId || null, is_private: isPrivate })
       setTitle(''); setBody(''); setLegId(''); setIsPrivate(false)
       onClose()
-    } finally {
-      setSubmitting(false)
-    }
+    } catch (err: unknown) { setErrorMessage(extractModalError(err)) } finally { setSubmitting(false) }
   }
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Add Travel Note">
       <form onSubmit={(e) => void handleSave(e)} className="space-y-3">
+        <ModalErrorAlert message={errorMessage} />
         <FormField label="Note Title" htmlFor="note-title" required>
           <TextInput id="note-title" variant="brand" required value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Station Locker Instructions" />
         </FormField>

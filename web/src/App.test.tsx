@@ -394,4 +394,27 @@ describe('Odysseus Variant A Shell', () => {
     expect(alert).toHaveTextContent('Odysseus API Error')
     expect(alert).toHaveTextContent('Database offline')
   })
+
+  it('keeps modal open and renders inline error alert when save rejects with 422', async () => {
+    const adapter = createSyntheticAdapter()
+    adapter.createItineraryItem = async () => {
+      throw new OdysseusApiError({
+        status: 422,
+        detail: 'Invalid IANA timezone: Mars/Phobos',
+        path: '/trips/trip-1/itinerary-items',
+      })
+    }
+    render(<App adapter={adapter} />)
+
+    await screen.findAllByRole('heading', { name: 'Pacific Explorer' })
+    const addButtons = screen.getAllByRole('button', { name: 'Add Activity' })
+    fireEvent.click(addButtons[0])
+
+    const titleInput = await screen.findByLabelText(/Activity Title/)
+    fireEvent.change(titleInput, { target: { value: 'Ferry Hop' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save Item' }))
+
+    expect(await screen.findByText('Invalid IANA timezone: Mars/Phobos')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Add Itinerary Item' })).toBeInTheDocument()
+  })
 })

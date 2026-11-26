@@ -5,6 +5,7 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from app.domain.errors import DomainNotFoundError
 from app.models import Checklist, ChecklistItem, TravelNote
 from app.schemas import (
     ChecklistCreate,
@@ -42,15 +43,22 @@ def list_checklists(db: Session, trip_id: uuid.UUID) -> list[Checklist]:
     )
 
 
+def _reload_checklist_or_fail(db: Session, checklist_id: uuid.UUID) -> Checklist:
+    loaded = db.scalar(
+        select(Checklist).where(Checklist.id == checklist_id).options(selectinload(Checklist.items))
+    )
+    if loaded is None:
+        raise DomainNotFoundError(f"Checklist {checklist_id} not found after persistence.")
+    return loaded
+
+
 def create_checklist(db: Session, trip_id: uuid.UUID, payload: ChecklistCreate) -> Checklist:
     """Create a typed checklist under trip_id."""
     require_trip(db, trip_id)
     checklist = Checklist(trip_id=trip_id, **payload.model_dump())
     db.add(checklist)
     db.commit()
-    return db.scalar(
-        select(Checklist).where(Checklist.id == checklist.id).options(selectinload(Checklist.items))
-    )  # type: ignore[return-value]
+    return _reload_checklist_or_fail(db, checklist.id)
 
 
 def update_checklist(
@@ -66,9 +74,7 @@ def update_checklist(
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(checklist, field, value)
     db.commit()
-    return db.scalar(
-        select(Checklist).where(Checklist.id == checklist.id).options(selectinload(Checklist.items))
-    )  # type: ignore[return-value]
+    return _reload_checklist_or_fail(db, checklist.id)
 
 
 def delete_checklist(db: Session, trip_id: uuid.UUID, checklist_id: uuid.UUID) -> None:

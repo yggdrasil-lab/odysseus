@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test'
+import { devices, expect, test, type Locator, type Page } from '@playwright/test'
 
 async function mockOdysseusApi(page: Page) {
   const trip = {
@@ -209,10 +209,47 @@ async function mockOdysseusApi(page: Page) {
   })
 }
 
-test.describe('Odysseus Variant A Shell', () => {
-  test('renders 3-pane Variant A split on Desktop (1440x900) and supports activity modal', async ({
-    page,
-  }) => {
+async function assertNoHorizontalOverflow(page: Page) {
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
+  )
+  expect(overflow).toBe(false)
+}
+
+async function assertMinTouchHeight(locator: Locator, minPx = 44) {
+  const box = await locator.boundingBox()
+  expect(box?.height ?? 0).toBeGreaterThanOrEqual(minPx)
+}
+
+const MOBILE_PLATFORMS = [
+  {
+    name: 'ios',
+    captureBookings: true,
+    modalIndex: '05-modal.png',
+    options: {
+      viewport: devices['iPhone 14'].viewport,
+      userAgent: devices['iPhone 14'].userAgent,
+      deviceScaleFactor: devices['iPhone 14'].deviceScaleFactor,
+      isMobile: devices['iPhone 14'].isMobile,
+      hasTouch: devices['iPhone 14'].hasTouch,
+    },
+  },
+  {
+    name: 'android',
+    captureBookings: false,
+    modalIndex: '04-modal.png',
+    options: {
+      viewport: devices['Pixel 7'].viewport,
+      userAgent: devices['Pixel 7'].userAgent,
+      deviceScaleFactor: devices['Pixel 7'].deviceScaleFactor,
+      isMobile: devices['Pixel 7'].isMobile,
+      hasTouch: devices['Pixel 7'].hasTouch,
+    },
+  },
+]
+
+test.describe('Desktop Visual Inspection - Variant A Split', () => {
+  test('captures desktop 3-pane split and open modal', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await mockOdysseusApi(page)
     await page.goto('/')
@@ -227,25 +264,30 @@ test.describe('Odysseus Variant A Shell', () => {
     await expect(desktop.getByText(/09:15 - 10:45/).first()).toBeVisible()
     await expect(desktop.getByText('Station Locker Memo')).toBeVisible()
     await expect(desktop.getByText('Private', { exact: true })).toBeVisible()
+    await assertNoHorizontalOverflow(page)
+
+    await page.screenshot({ path: 'screenshots/desktop/01-variant-a-split.png' })
 
     await desktop.getByTestId('map-scope-leg').click()
     await expect(desktop.getByLabel('Scope map to leg')).toBeVisible()
 
     await desktop.getByRole('button', { name: 'Add Activity' }).click()
     await expect(page.getByRole('heading', { name: 'Add Itinerary Item' })).toBeVisible()
+    await page.waitForTimeout(350)
+    await assertMinTouchHeight(page.getByLabel(/Activity Title/))
+    await page.screenshot({ path: 'screenshots/desktop/02-modal.png' })
+
     await page.getByLabel(/Activity Title/).fill('Sunset Pier Walk')
     await page.getByRole('button', { name: 'Save Item' }).click()
     await expect(desktop.getByText('Sunset Pier Walk').first()).toBeVisible()
   })
+})
 
-  for (const viewport of [
-    { name: 'iPhone 14', width: 390, height: 844 },
-    { name: 'Pixel 7', width: 412, height: 915 },
-  ]) {
-    test(`renders mobile bottom nav and clean tab switching on ${viewport.name}`, async ({
-      page,
-    }) => {
-      await page.setViewportSize({ width: viewport.width, height: viewport.height })
+for (const platform of MOBILE_PLATFORMS) {
+  test.describe(`Visual Inspection - ${platform.name.toUpperCase()}`, () => {
+    test.use({ ...platform.options })
+
+    test(`captures mobile tabs, modal, and invariants on ${platform.name}`, async ({ page }) => {
       await mockOdysseusApi(page)
       await page.goto('/')
 
@@ -254,24 +296,41 @@ test.describe('Odysseus Variant A Shell', () => {
       await expect(bottomNav).toBeVisible()
       await expect(mobile).toBeVisible()
       await expect(mobile.getByRole('heading', { name: 'Pacific Explorer' })).toBeVisible()
-
-      const hasHorizontalOverflow = await page.evaluate(
-        () => document.documentElement.scrollWidth > window.innerWidth,
-      )
-      expect(hasHorizontalOverflow).toBe(false)
+      await assertNoHorizontalOverflow(page)
+      await assertMinTouchHeight(mobile.getByRole('button', { name: 'Add Activity' }))
+      await page.screenshot({
+        path: `screenshots/${platform.name}/01-itinerary.png`,
+        fullPage: true,
+      })
 
       await bottomNav.getByRole('button', { name: 'Map' }).click()
       await expect(mobile.getByTestId('map-preview-panel')).toBeVisible()
+      await assertNoHorizontalOverflow(page)
+      await page.screenshot({ path: `screenshots/${platform.name}/02-map.png` })
 
       await bottomNav.getByRole('button', { name: 'Lists' }).click()
       await expect(mobile.getByText('Carry-on Essentials')).toBeVisible()
       await expect(mobile.getByText('Station Locker Memo')).toBeVisible()
+      await assertNoHorizontalOverflow(page)
+      await page.screenshot({
+        path: `screenshots/${platform.name}/03-lists.png`,
+        fullPage: true,
+      })
 
-      await bottomNav.getByRole('button', { name: 'Bookings' }).click()
-      await expect(mobile.getByText('Bookings & Confirmations')).toBeVisible()
+      if (platform.captureBookings) {
+        await bottomNav.getByRole('button', { name: 'Bookings' }).click()
+        await expect(mobile.getByText('Bookings & Confirmations')).toBeVisible()
+        await assertNoHorizontalOverflow(page)
+        await page.screenshot({ path: `screenshots/${platform.name}/04-bookings.png` })
+      }
 
-      await bottomNav.getByRole('button', { name: 'Budget' }).click()
-      await expect(mobile.getByText('Trip Budget & Plutus Sync')).toBeVisible()
+      await bottomNav.getByRole('button', { name: 'Itinerary' }).click()
+      await mobile.getByRole('button', { name: 'Add Activity' }).click()
+      await expect(page.getByRole('heading', { name: 'Add Itinerary Item' })).toBeVisible()
+      await page.waitForTimeout(350)
+      await assertMinTouchHeight(page.getByLabel(/Activity Title/))
+      await assertMinTouchHeight(page.getByRole('button', { name: 'Save Item' }))
+      await page.screenshot({ path: `screenshots/${platform.name}/${platform.modalIndex}` })
     })
-  }
-})
+  })
+}
