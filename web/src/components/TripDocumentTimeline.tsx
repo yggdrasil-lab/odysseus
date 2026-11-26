@@ -111,6 +111,46 @@ const SegmentTimelineRow: React.FC<{ entry: DaySegmentEntry }> = ({ entry }) => 
   )
 }
 
+const ScheduledItemActions: React.FC<{
+  item: ItineraryItem
+  isDone: boolean
+  readOnly: boolean
+  onToggleDone: (item: ItineraryItem) => Promise<void>
+  onMoveToBacklog: (itemId: string) => Promise<void>
+  onDelete: (itemId: string) => Promise<void>
+}> = ({ item, isDone, readOnly, onToggleDone, onMoveToBacklog, onDelete }) => (
+  <div className="flex items-center gap-1.5 shrink-0">
+    <Button
+      variant={isDone ? 'secondary' : 'outline'}
+      size="xs"
+      disabled={readOnly}
+      className="min-h-[44px] sm:min-h-[34px]"
+      icon={<CheckCircle2 className="w-3.5 h-3.5" />}
+      onClick={() => void onToggleDone(item)}
+    >
+      {isDone ? 'Reopen' : 'Done'}
+    </Button>
+    <Button
+      variant="ghost"
+      size="xs"
+      disabled={readOnly}
+      className="min-h-[44px] sm:min-h-[34px]"
+      onClick={() => void onMoveToBacklog(item.id)}
+    >
+      Backlog
+    </Button>
+    <Button
+      variant="danger"
+      size="xs"
+      disabled={readOnly}
+      aria-label={`Delete ${item.title}`}
+      className="min-h-[44px] sm:min-h-[34px]"
+      icon={<Trash2 className="w-3.5 h-3.5" />}
+      onClick={() => void onDelete(item.id)}
+    />
+  </div>
+)
+
 const ScheduledItemRow: React.FC<{
   item: ItineraryItem
   linkedPlace?: Place
@@ -129,19 +169,11 @@ const ScheduledItemRow: React.FC<{
     >
       <div className="space-y-1 min-w-0">
         <div className="flex flex-wrap items-center gap-1.5">
-          <span
-            className={`text-xs font-semibold ${
-              isDone ? 'line-through text-muted' : 'text-foreground'
-            }`}
-          >
+          <span className={`text-xs font-semibold ${isDone ? 'line-through text-muted' : 'text-foreground'}`}>
             {item.title}
           </span>
           <StatusBadge label={item.category} variant="info" size="xs" showDot={false} />
-          <StatusBadge
-            label={item.status}
-            variant={isDone ? 'success' : item.status === 'confirmed' ? 'info' : 'idle'}
-            size="xs"
-          />
+          <StatusBadge label={item.status} variant={isDone ? 'success' : item.status === 'confirmed' ? 'info' : 'idle'} size="xs" />
         </div>
         <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted">
           {Boolean(timeLabel) && (
@@ -158,37 +190,14 @@ const ScheduledItemRow: React.FC<{
           )}
         </div>
       </div>
-
-      <div className="flex items-center gap-1.5 shrink-0">
-        <Button
-          variant={isDone ? 'secondary' : 'outline'}
-          size="xs"
-          disabled={readOnly}
-          className="min-h-[44px] sm:min-h-[34px]"
-          icon={<CheckCircle2 className="w-3.5 h-3.5" />}
-          onClick={() => void onToggleDone(item)}
-        >
-          {isDone ? 'Reopen' : 'Done'}
-        </Button>
-        <Button
-          variant="ghost"
-          size="xs"
-          disabled={readOnly}
-          className="min-h-[44px] sm:min-h-[34px]"
-          onClick={() => void onMoveToBacklog(item.id)}
-        >
-          Backlog
-        </Button>
-        <Button
-          variant="danger"
-          size="xs"
-          disabled={readOnly}
-          aria-label={`Delete ${item.title}`}
-          className="min-h-[44px] sm:min-h-[34px]"
-          icon={<Trash2 className="w-3.5 h-3.5" />}
-          onClick={() => void onDelete(item.id)}
-        />
-      </div>
+      <ScheduledItemActions
+        item={item}
+        isDone={isDone}
+        readOnly={readOnly}
+        onToggleDone={onToggleDone}
+        onMoveToBacklog={onMoveToBacklog}
+        onDelete={onDelete}
+      />
     </div>
   )
 }

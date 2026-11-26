@@ -207,6 +207,60 @@ const LegMapPackSection: React.FC<{
   )
 }
 
+const SyncProgressBox: React.FC<{ syncProgress: OfflineSyncProgress }> = ({ syncProgress }) => {
+  const totalCount = syncProgress.totalCount
+  const completedCount = syncProgress.completedCount
+  return (
+    <div className="space-y-1.5 rounded-lg bg-background/70 border border-border/70 p-3 text-xs">
+      <div className="flex items-center justify-between font-mono text-[11px] text-muted">
+        <span>Syncing ({syncProgress.phase})</span>
+        <span>
+          {completedCount}/{totalCount} files · {formatBytesCompact(syncProgress.downloadedBytes)}
+        </span>
+      </div>
+      <ProgressBar
+        value={totalCount > 0 ? completedCount : 25}
+        max={totalCount > 0 ? totalCount : 100}
+        variant="brand"
+        label="Offline sync progress"
+      />
+    </div>
+  )
+}
+
+const OfflineSyncFooter: React.FC<{
+  isSyncing: boolean
+  isOffline: boolean
+  hasSummary: boolean
+  includeMapPacks: boolean
+  onClearOffline: () => Promise<void>
+  onSaveOffline: (includeMapPacks: boolean) => Promise<void>
+}> = ({ isSyncing, isOffline, hasSummary, includeMapPacks, onClearOffline, onSaveOffline }) => (
+  <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-border/60">
+    <Button
+      variant="ghost"
+      size="sm"
+      disabled={isSyncing || !hasSummary}
+      className="min-h-[44px]"
+      icon={<Trash2 className="w-3.5 h-3.5 text-rose-400" />}
+      onClick={() => void onClearOffline()}
+    >
+      Remove Offline Copy
+    </Button>
+    <Button
+      variant="brand"
+      size="sm"
+      loading={isSyncing}
+      disabled={isOffline}
+      className="min-h-[44px]"
+      icon={<DownloadCloud className="w-4 h-4" />}
+      onClick={() => void onSaveOffline(includeMapPacks).catch(() => {})}
+    >
+      Save Trip Offline
+    </Button>
+  </div>
+)
+
 export const OfflineSyncModal: React.FC<OfflineSyncModalProps> = (props) => {
   const [includeMapPacks, setIncludeMapPacks] = useState<boolean>(
     () => props.offlineSummary?.includesMapPacks ?? true,
@@ -222,82 +276,19 @@ export const OfflineSyncModal: React.FC<OfflineSyncModalProps> = (props) => {
   }, [props.isOpen, props.offlineSummary])
 
   const combinedError = props.offlineError ?? packError
-  const totalCount = props.syncProgress?.totalCount ?? 0
-  const completedCount = props.syncProgress?.completedCount ?? 0
 
   return (
-    <Modal
-      isOpen={props.isOpen}
-      onClose={props.onClose}
-      title="Save Trip Offline"
-      subtitle={props.trip.title}
-      className="max-w-xl"
-    >
+    <Modal isOpen={props.isOpen} onClose={props.onClose} title="Save Trip Offline" subtitle={props.trip.title} className="max-w-xl">
       <div data-testid="offline-sync-modal" className="space-y-4">
         <OfflineStorageStatusCard offlineSummary={props.offlineSummary} estimate={estimate} />
         {combinedError && <AlertBanner variant="error" title="Offline Sync Error">{combinedError}</AlertBanner>}
-
         <label className="flex items-center gap-2.5 rounded-lg bg-background/60 border border-border/70 px-3 py-2 min-h-[44px] text-xs text-foreground cursor-pointer">
-          <input
-            type="checkbox"
-            checked={includeMapPacks}
-            onChange={(e) => setIncludeMapPacks(e.target.checked)}
-            disabled={props.isSyncing}
-            className="w-4 h-4 accent-sky-400"
-          />
+          <input type="checkbox" checked={includeMapPacks} onChange={(e) => setIncludeMapPacks(e.target.checked)} disabled={props.isSyncing} className="w-4 h-4 accent-sky-400" />
           <span>Include per-Leg .pmtiles MapPacks</span>
         </label>
-
-        {props.isSyncing && props.syncProgress && (
-          <div className="space-y-1.5 rounded-lg bg-background/70 border border-border/70 p-3 text-xs">
-            <div className="flex items-center justify-between font-mono text-[11px] text-muted">
-              <span>Syncing ({props.syncProgress.phase})</span>
-              <span>
-                {completedCount}/{totalCount} files · {formatBytesCompact(props.syncProgress.downloadedBytes)}
-              </span>
-            </div>
-            <ProgressBar
-              value={totalCount > 0 ? completedCount : 25}
-              max={totalCount > 0 ? totalCount : 100}
-              variant="brand"
-              label="Offline sync progress"
-            />
-          </div>
-        )}
-
-        <LegMapPackSection
-          legs={props.legs}
-          mapPacks={props.mapPacks}
-          isOffline={props.isOffline}
-          isSyncing={props.isSyncing}
-          onCreateMapPack={props.onCreateMapPack}
-          onDeleteMapPack={props.onDeleteMapPack}
-          onError={setPackError}
-        />
-
-        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-border/60">
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={props.isSyncing || !props.offlineSummary}
-            className="min-h-[44px]"
-            icon={<Trash2 className="w-3.5 h-3.5 text-rose-400" />}
-            onClick={() => void props.onClearOffline()}
-          >
-            Remove Offline Copy
-          </Button>
-          <Button
-            variant="brand"
-            size="sm"
-            loading={props.isSyncing}
-            disabled={props.isOffline}
-            className="min-h-[44px]"
-            icon={<DownloadCloud className="w-4 h-4" />}
-            onClick={() => void props.onSaveOffline(includeMapPacks).catch(() => {})}
-          >
-            Save Trip Offline
-          </Button>
-        </div>
+        {props.isSyncing && props.syncProgress && <SyncProgressBox syncProgress={props.syncProgress} />}
+        <LegMapPackSection legs={props.legs} mapPacks={props.mapPacks} isOffline={props.isOffline} isSyncing={props.isSyncing} onCreateMapPack={props.onCreateMapPack} onDeleteMapPack={props.onDeleteMapPack} onError={setPackError} />
+        <OfflineSyncFooter isSyncing={props.isSyncing} isOffline={props.isOffline} hasSummary={Boolean(props.offlineSummary)} includeMapPacks={includeMapPacks} onClearOffline={props.onClearOffline} onSaveOffline={props.onSaveOffline} />
       </div>
     </Modal>
   )
