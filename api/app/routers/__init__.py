@@ -1,0 +1,1 @@
+"""Odysseus FastAPI router package."""

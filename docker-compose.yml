@@ -1,0 +1,183 @@
+services:
+  odysseus-db:
+    image: postgres:16-alpine
+    stop_signal: SIGINT
+    stop_grace_period: 60s
+    environment:
+      - POSTGRES_DB=odysseus
+      - POSTGRES_USER=odysseus
+      - POSTGRES_PASSWORD_FILE=/run/secrets/odysseus_db_password
+      - TZ=${TZ}
+    volumes:
+      - ${ODYSSEUS_DB_MOUNT_PATH}:/var/lib/postgresql/data
+    secrets:
+      - odysseus_db_password
+    networks:
+      - aether-net
+    labels:
+      - "com.docker.compose.project=${STACK_NAME}"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U odysseus -d odysseus"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      mode: replicated
+      replicas: 1
+      endpoint_mode: dnsrr
+      placement:
+        constraints:
+          - node.role == manager
+      update_config:
+        parallelism: 1
+        order: stop-first
+      restart_policy:
+        condition: any
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
+
+  odysseus-api:
+    image: ${REGISTRY_PREFIX}odysseus-api:${IMAGE_TAG}
+    build: ./api
+    environment:
+      - ODYSSEUS_DB_HOST=odysseus-db
+      - ODYSSEUS_DB_PORT=5432
+      - ODYSSEUS_DB_NAME=odysseus
+      - ODYSSEUS_DB_USER=odysseus
+      - ODYSSEUS_DB_PASSWORD_FILE=/run/secrets/odysseus_db_password
+      - ODYSSEUS_MCP_TOKEN_FILE=/run/secrets/odysseus_mcp_token
+      - ODYSSEUS_INTEGRATION_TOKEN_FILE=/run/secrets/odysseus_integration_token
+      - IMMICH_API_KEY_FILE=/run/secrets/immich_api_key
+      - ODYSSEUS_ENVIRONMENT=production
+      - PLUTUS_API_URL=${PLUTUS_API_URL}
+      - CHRONOS_API_URL=${CHRONOS_API_URL}
+      - IMMICH_API_URL=${IMMICH_API_URL}
+      - DOMAIN_NAME=${DOMAIN_NAME}
+      - TZ=${TZ}
+      - MAPPACKS_DIR=/var/cache/odysseus/mappacks
+    volumes:
+      - ${ODYSSEUS_MAPPACKS_MOUNT_PATH}:/var/cache/odysseus/mappacks
+    secrets:
+      - odysseus_db_password
+      - odysseus_mcp_token
+      - odysseus_integration_token
+      - immich_api_key
+    networks:
+      - aether-net
+    labels:
+      - "com.docker.compose.project=${STACK_NAME}"
+    deploy:
+      mode: replicated
+      replicas: 1
+      endpoint_mode: dnsrr
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: any
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
+      labels:
+        - "traefik.enable=true"
+        - "traefik.docker.network=aether-net"
+        - "traefik.http.services.odysseus-api.loadbalancer.server.port=8000"
+        - "traefik.http.middlewares.odysseus-api-strip.stripprefix.prefixes=/api"
+        - "traefik.http.middlewares.odysseus-strip-authentik.headers.customrequestheaders.X-authentik-username="
+        - "traefik.http.middlewares.odysseus-strip-authentik.headers.customrequestheaders.X-authentik-email="
+        - "traefik.http.middlewares.odysseus-strip-authentik.headers.customrequestheaders.X-authentik-groups="
+        - "traefik.http.middlewares.odysseus-strip-authentik.headers.customrequestheaders.X-authentik-name="
+        - "traefik.http.middlewares.odysseus-strip-authentik.headers.customrequestheaders.X-authentik-uid="
+        - "traefik.http.middlewares.odysseus-deny-external.ipallowlist.sourcerange=127.0.0.1/32"
+        - "traefik.http.routers.odysseus-api.rule=Host(`odysseus.${DOMAIN_NAME}`) && PathPrefix(`/api`)"
+        - "traefik.http.routers.odysseus-api.entrypoints=websecure"
+        - "traefik.http.routers.odysseus-api.tls=true"
+        - "traefik.http.routers.odysseus-api.tls.certresolver=cloudflare"
+        - "traefik.http.routers.odysseus-api.priority=50"
+        - "traefik.http.routers.odysseus-api.service=odysseus-api"
+        - "traefik.http.routers.odysseus-api.middlewares=authentik@docker,odysseus-api-strip"
+        - "traefik.http.routers.odysseus-share-api.rule=Host(`odysseus.${DOMAIN_NAME}`) && PathPrefix(`/api/share`) && Method(`GET`)"
+        - "traefik.http.routers.odysseus-share-api.entrypoints=websecure"
+        - "traefik.http.routers.odysseus-share-api.tls=true"
+        - "traefik.http.routers.odysseus-share-api.tls.certresolver=cloudflare"
+        - "traefik.http.routers.odysseus-share-api.priority=100"
+        - "traefik.http.routers.odysseus-share-api.service=odysseus-api"
+        - "traefik.http.routers.odysseus-share-api.middlewares=odysseus-strip-authentik,odysseus-api-strip"
+        - "traefik.http.routers.odysseus-mcp.rule=Host(`odysseus.${DOMAIN_NAME}`) && PathPrefix(`/mcp`)"
+        - "traefik.http.routers.odysseus-mcp.entrypoints=websecure"
+        - "traefik.http.routers.odysseus-mcp.tls=true"
+        - "traefik.http.routers.odysseus-mcp.tls.certresolver=cloudflare"
+        - "traefik.http.routers.odysseus-mcp.priority=100"
+        - "traefik.http.routers.odysseus-mcp.service=odysseus-api"
+        - "traefik.http.routers.odysseus-mcp.middlewares=odysseus-strip-authentik"
+        - "traefik.http.routers.odysseus-integrations-deny.rule=Host(`odysseus.${DOMAIN_NAME}`) && (PathPrefix(`/integrations`) || PathPrefix(`/api/integrations`))"
+        - "traefik.http.routers.odysseus-integrations-deny.entrypoints=websecure"
+        - "traefik.http.routers.odysseus-integrations-deny.tls=true"
+        - "traefik.http.routers.odysseus-integrations-deny.tls.certresolver=cloudflare"
+        - "traefik.http.routers.odysseus-integrations-deny.priority=110"
+        - "traefik.http.routers.odysseus-integrations-deny.service=odysseus-api"
+        - "traefik.http.routers.odysseus-integrations-deny.middlewares=odysseus-deny-external"
+
+  odysseus-web:
+    image: ${REGISTRY_PREFIX}odysseus-web:${IMAGE_TAG}
+    build: ./web
+    environment:
+      - TZ=${TZ}
+    networks:
+      - aether-net
+    labels:
+      - "com.docker.compose.project=${STACK_NAME}"
+    deploy:
+      mode: replicated
+      replicas: 1
+      endpoint_mode: dnsrr
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: any
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 64M
+      labels:
+        - "traefik.enable=true"
+        - "traefik.docker.network=aether-net"
+        - "traefik.http.services.odysseus-web.loadbalancer.server.port=8080"
+        - "traefik.http.routers.odysseus-web.rule=Host(`odysseus.${DOMAIN_NAME}`)"
+        - "traefik.http.routers.odysseus-web.entrypoints=websecure"
+        - "traefik.http.routers.odysseus-web.tls=true"
+        - "traefik.http.routers.odysseus-web.tls.certresolver=cloudflare"
+        - "traefik.http.routers.odysseus-web.priority=10"
+        - "traefik.http.routers.odysseus-web.service=odysseus-web"
+        - "traefik.http.routers.odysseus-web.middlewares=authentik@docker"
+        - "traefik.http.routers.odysseus-web-public.rule=Host(`odysseus.${DOMAIN_NAME}`) && (PathPrefix(`/share`) || PathPrefix(`/assets/`) || Path(`/manifest.webmanifest`, `/favicon.svg`, `/sw.js`, `/registerSW.js`) || PathPrefix(`/apple-touch-icon`, `/pwa-`, `/workbox-`))"
+        - "traefik.http.routers.odysseus-web-public.entrypoints=websecure"
+        - "traefik.http.routers.odysseus-web-public.tls=true"
+        - "traefik.http.routers.odysseus-web-public.tls.certresolver=cloudflare"
+        - "traefik.http.routers.odysseus-web-public.priority=100"
+        - "traefik.http.routers.odysseus-web-public.service=odysseus-web"
+
+secrets:
+  odysseus_db_password:
+    external: true
+    name: ${ODYSSEUS_DB_PASSWORD_NAME}
+  odysseus_mcp_token:
+    external: true
+    name: ${ODYSSEUS_MCP_TOKEN_NAME}
+  odysseus_integration_token:
+    external: true
+    name: ${ODYSSEUS_INTEGRATION_TOKEN_NAME}
+  immich_api_key:
+    external: true
+    name: ${IMMICH_API_KEY_NAME}
+
+networks:
+  aether-net:
+    external: true
