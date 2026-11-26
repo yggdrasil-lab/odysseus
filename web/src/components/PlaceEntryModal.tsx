@@ -211,15 +211,39 @@ export interface PlaceEntryModalProps {
   onUpdatePlace: (placeId: string, payload: PlaceUpdatePayload) => Promise<void>
 }
 
+function toPlacePayload(draft: PlaceDraftState, latNum: number, lngNum: number): PlaceCreatePayload {
+  return {
+    name: draft.name.trim(),
+    category: draft.category,
+    latitude: latNum,
+    longitude: lngNum,
+    address: draft.address.trim() || null,
+    external_map_url: draft.externalMapUrl.trim() || null,
+    google_place_id: draft.googlePlaceId.trim() || null,
+    osm_id: draft.osmId.trim() || null,
+    notes: draft.notes.trim() || null,
+    is_backlog: draft.isBacklog,
+  }
+}
+
+const UrlResolverTab: React.FC<{
+  rawUrl: string
+  resolving: boolean
+  onChangeUrl: (val: string) => void
+  onResolve: () => Promise<void>
+}> = ({ rawUrl, resolving, onChangeUrl, onResolve }) => (
+  <div className="space-y-3">
+    <FormField label="Google Maps Share URL" htmlFor="place-google-url">
+      <TextInput id="place-google-url" variant="brand" value={rawUrl} onChange={(e) => onChangeUrl(e.target.value)} placeholder="https://maps.app.goo.gl/... or https://www.google.com/maps/@..." />
+    </FormField>
+    <Button variant="brand" size="sm" loading={resolving} className="min-h-[44px] w-full" onClick={() => void onResolve()}>
+      Resolve Link
+    </Button>
+  </div>
+)
+
 export const PlaceEntryModal: React.FC<PlaceEntryModalProps> = ({
-  isOpen,
-  editingPlace,
-  initialCoords,
-  onClose,
-  onSearchPlaces,
-  onResolvePlaceUrl,
-  onCreatePlace,
-  onUpdatePlace,
+  isOpen, editingPlace, initialCoords, onClose, onSearchPlaces, onResolvePlaceUrl, onCreatePlace, onUpdatePlace,
 }) => {
   const [activeTab, setActiveTab] = useState<PlaceEntryTab>('search')
   const [rawUrl, setRawUrl] = useState('')
@@ -243,13 +267,10 @@ export const PlaceEntryModal: React.FC<PlaceEntryModalProps> = ({
     if (!trimmed) return
     setResolvingUrl(true); setFallbackNotice(null)
     try {
-      const resolved = await onResolvePlaceUrl(trimmed)
+      const res = await onResolvePlaceUrl(trimmed)
       patchDraft({
-        externalMapUrl: resolved.resolved_url || trimmed,
-        latitude: String(resolved.latitude),
-        longitude: String(resolved.longitude),
-        name: draft.name.trim() ? draft.name : resolved.suggested_name ?? '',
-        googlePlaceId: resolved.google_place_id ?? '',
+        externalMapUrl: res.resolved_url || trimmed, latitude: String(res.latitude), longitude: String(res.longitude),
+        name: draft.name.trim() ? draft.name : res.suggested_name ?? '', googlePlaceId: res.google_place_id ?? '',
       })
       setActiveTab('manual')
     } catch (err: unknown) {
@@ -257,46 +278,31 @@ export const PlaceEntryModal: React.FC<PlaceEntryModalProps> = ({
       patchDraft({ externalMapUrl: trimmed })
       setFallbackNotice(`${detail} Switched to Manual Pin with your link preserved.`)
       setActiveTab('manual')
-    } finally {
-      setResolvingUrl(false)
-    }
+    } finally { setResolvingUrl(false) }
   }
 
   const handleSave = async (event: React.FormEvent) => {
     event.preventDefault()
-    const latNum = Number(draft.latitude)
-    const lngNum = Number(draft.longitude)
+    const latNum = Number(draft.latitude); const lngNum = Number(draft.longitude)
     if (!draft.name.trim() || Number.isNaN(latNum) || Number.isNaN(lngNum)) {
-      setSaveError('Name, valid latitude, and valid longitude are required.')
-      return
+      setSaveError('Name, valid latitude, and valid longitude are required.'); return
     }
     setSubmitting(true); setSaveError(null)
-    const payload: PlaceCreatePayload = {
-      name: draft.name.trim(), category: draft.category, latitude: latNum, longitude: lngNum,
-      address: draft.address.trim() || null, external_map_url: draft.externalMapUrl.trim() || null,
-      google_place_id: draft.googlePlaceId.trim() || null, osm_id: draft.osmId.trim() || null,
-      notes: draft.notes.trim() || null, is_backlog: draft.isBacklog,
-    }
+    const payload = toPlacePayload(draft, latNum, lngNum)
     try {
       if (editingPlace) await onUpdatePlace(editingPlace.id, payload)
       else await onCreatePlace(payload)
       onClose()
     } catch (err: unknown) {
       setSaveError(err instanceof OdysseusApiError ? err.detail : 'Unable to save place.')
-    } finally {
-      setSubmitting(false)
-    }
+    } finally { setSubmitting(false) }
   }
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={editingPlace ? 'Edit Saved Place' : 'Add Trip Place'} className="max-w-lg">
       <div className="space-y-3">
         <SegmentedControl<PlaceEntryTab>
-          value={activeTab}
-          onChange={setActiveTab}
-          variant="brand"
-          fullWidth
-          idPrefix="place-tab"
+          value={activeTab} onChange={setActiveTab} variant="brand" fullWidth idPrefix="place-tab"
           options={[
             { id: 'search', label: 'Search (Photon)', icon: <Search className="w-3.5 h-3.5" /> },
             { id: 'url', label: 'Paste Google Link', icon: <Link2 className="w-3.5 h-3.5" /> },
@@ -305,32 +311,13 @@ export const PlaceEntryModal: React.FC<PlaceEntryModalProps> = ({
         />
         {fallbackNotice && <AlertBanner variant="warning" title="Manual Pin Fallback">{fallbackNotice}</AlertBanner>}
         {activeTab === 'search' && (
-          <PhotonSearchTab
-            isOpen={isOpen}
-            active={activeTab === 'search'}
-            onSearchPlaces={onSearchPlaces}
-            onSelectCandidate={(cand) => {
-              patchDraft({
-                name: cand.name, latitude: String(cand.latitude), longitude: String(cand.longitude),
-                address: cand.address ?? '', osmId: cand.osm_id ?? '', category: normalizeCategoryHint(cand.category_hint),
-              })
-              setFallbackNotice(null); setActiveTab('manual')
-            }}
-          />
+          <PhotonSearchTab isOpen={isOpen} active={activeTab === 'search'} onSearchPlaces={onSearchPlaces} onSelectCandidate={(cand) => {
+            patchDraft({ name: cand.name, latitude: String(cand.latitude), longitude: String(cand.longitude), address: cand.address ?? '', osmId: cand.osm_id ?? '', category: normalizeCategoryHint(cand.category_hint) })
+            setFallbackNotice(null); setActiveTab('manual')
+          }} />
         )}
-        {activeTab === 'url' && (
-          <div className="space-y-3">
-            <FormField label="Google Maps Share URL" htmlFor="place-google-url">
-              <TextInput id="place-google-url" variant="brand" value={rawUrl} onChange={(e) => setRawUrl(e.target.value)} placeholder="https://maps.app.goo.gl/... or https://www.google.com/maps/@..." />
-            </FormField>
-            <Button variant="brand" size="sm" loading={resolvingUrl} className="min-h-[44px] w-full" onClick={() => void handleResolveUrl()}>
-              Resolve Link
-            </Button>
-          </div>
-        )}
-        {activeTab === 'manual' && (
-          <ManualPlaceForm draft={draft} editing={Boolean(editingPlace)} submitting={submitting} saveError={saveError} onPatch={patchDraft} onSubmit={handleSave} onClose={onClose} />
-        )}
+        {activeTab === 'url' && <UrlResolverTab rawUrl={rawUrl} resolving={resolvingUrl} onChangeUrl={setRawUrl} onResolve={handleResolveUrl} />}
+        {activeTab === 'manual' && <ManualPlaceForm draft={draft} editing={Boolean(editingPlace)} submitting={submitting} saveError={saveError} onPatch={patchDraft} onSubmit={handleSave} onClose={onClose} />}
       </div>
     </Modal>
   )

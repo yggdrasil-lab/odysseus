@@ -260,6 +260,20 @@ export interface BookingModalProps {
   onUpdate: (bookingId: string, payload: BookingUpdatePayload) => Promise<void>
 }
 
+function toBookingPayload(form: BookingFormState): BookingCreatePayload {
+  return {
+    title: form.title.trim(),
+    booking_type: form.bookingType,
+    status: form.status,
+    provider: form.provider.trim() || null,
+    confirmation_code: form.confirmationCode.trim() || null,
+    quoted_cost: form.quotedCost.trim() || null,
+    quoted_currency: form.quotedCost.trim() ? form.quotedCurrency.trim() || 'NZD' : null,
+    notes: form.notes.trim() || null,
+    segments: form.segments.map(toSegmentPayload),
+  }
+}
+
 export const BookingModal: React.FC<BookingModalProps> = ({
   isOpen,
   editingBooking,
@@ -278,33 +292,15 @@ export const BookingModal: React.FC<BookingModalProps> = ({
     setForm(hydrateFormState(editingBooking, defaultTimezone))
   }, [defaultTimezone, editingBooking, isOpen])
 
-  const patchForm = (patch: Partial<BookingFormState>) => {
-    setForm((prev) => ({ ...prev, ...patch }))
-  }
-
-  const updateSegment = (index: number, patch: Partial<SegmentDraft>) => {
-    setForm((prev) => ({
-      ...prev,
-      segments: prev.segments.map((seg, i) => (i === index ? { ...seg, ...patch } : seg)),
-    }))
-  }
+  const patchForm = (patch: Partial<BookingFormState>) => setForm((prev) => ({ ...prev, ...patch }))
+  const updateSegment = (index: number, patch: Partial<SegmentDraft>) =>
+    setForm((prev) => ({ ...prev, segments: prev.segments.map((seg, i) => (i === index ? { ...seg, ...patch } : seg)) }))
 
   const handleSave = async (event: React.FormEvent) => {
     event.preventDefault()
     if (!form.title.trim()) return
-    setSubmitting(true)
-    setErrorMessage(null)
-    const payload: BookingCreatePayload = {
-      title: form.title.trim(),
-      booking_type: form.bookingType,
-      status: form.status,
-      provider: form.provider.trim() || null,
-      confirmation_code: form.confirmationCode.trim() || null,
-      quoted_cost: form.quotedCost.trim() || null,
-      quoted_currency: form.quotedCost.trim() ? form.quotedCurrency.trim() || 'NZD' : null,
-      notes: form.notes.trim() || null,
-      segments: form.segments.map(toSegmentPayload),
-    }
+    setSubmitting(true); setErrorMessage(null)
+    const payload = toBookingPayload(form)
     try {
       if (editingBooking) await onUpdate(editingBooking.id, payload)
       else await onCreate(payload)
@@ -319,41 +315,21 @@ export const BookingModal: React.FC<BookingModalProps> = ({
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={editingBooking ? 'Edit Booking' : 'Add Booking'} className="max-w-2xl">
       <form onSubmit={(e) => void handleSave(e)} className="space-y-3">
-        {errorMessage && (
-          <AlertBanner variant="error" title="Booking save failed">
-            {errorMessage}
-          </AlertBanner>
-        )}
+        {errorMessage && <AlertBanner variant="error" title="Booking save failed">{errorMessage}</AlertBanner>}
         <BookingCoreFields form={form} onPatch={patchForm} />
         <div className="space-y-2 pt-1">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-muted">
-              Ordered Segments ({form.segments.length})
-            </span>
-            <Button
-              variant="outline"
-              size="xs"
-              className="min-h-[44px] sm:min-h-[34px]"
-              icon={<Plus className="w-3.5 h-3.5" />}
-              onClick={() => patchForm({ segments: [...form.segments, createEmptySegment(defaultTimezone)] })}
-            >
+            <span className="text-xs font-bold uppercase tracking-wider text-muted">Ordered Segments ({form.segments.length})</span>
+            <Button variant="outline" size="xs" className="min-h-[44px] sm:min-h-[34px]" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => patchForm({ segments: [...form.segments, createEmptySegment(defaultTimezone)] })}>
               Add Segment
             </Button>
           </div>
           {form.segments.map((seg, idx) => (
-            <SegmentDraftCard
-              key={idx}
-              index={idx}
-              segment={seg}
-              onChange={updateSegment}
-              onRemove={(i) => patchForm({ segments: form.segments.filter((_, idx2) => idx2 !== i) })}
-            />
+            <SegmentDraftCard key={idx} index={idx} segment={seg} onChange={updateSegment} onRemove={(i) => patchForm({ segments: form.segments.filter((_, idx2) => idx2 !== i) })} />
           ))}
         </div>
         <div className="flex justify-end gap-2 pt-2">
-          <Button variant="ghost" onClick={onClose} className="min-h-[44px]">
-            Cancel
-          </Button>
+          <Button variant="ghost" onClick={onClose} className="min-h-[44px]">Cancel</Button>
           <Button type="submit" variant="brand" loading={submitting} className="min-h-[44px]">
             {editingBooking ? 'Save Booking' : 'Create Booking'}
           </Button>

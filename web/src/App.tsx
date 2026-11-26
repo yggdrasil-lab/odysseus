@@ -1,13 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import {
-  CalendarDays,
-  CheckSquare,
-  Compass,
-  Map as MapIcon,
-  Plus,
-  Ticket,
-  Wallet,
-} from 'lucide-react'
+import { CalendarDays, CheckSquare, Compass, Map as MapIcon, Plus, Ticket, Wallet } from 'lucide-react'
 import {
   AlertBanner,
   AppHeader,
@@ -36,24 +28,11 @@ const MOBILE_TABS = [
   { id: 'budget', label: 'Budget', icon: <Wallet className="w-4 h-4" /> },
 ]
 
-const WorkspaceErrorDisplay: React.FC<{
-  error: WorkspaceErrorState | null
-  onRetry: () => void
-}> = ({ error, onRetry }) => {
+const WorkspaceErrorDisplay: React.FC<{ error: WorkspaceErrorState | null; onRetry: () => void }> = ({ error, onRetry }) => {
   if (!error) return null
-  if (error.kind === 'session') {
-    return <SessionExpiredBanner onReauth={onRetry} message={error.message} />
-  }
+  if (error.kind === 'session') return <SessionExpiredBanner onReauth={onRetry} message={error.message} />
   return (
-    <AlertBanner
-      variant="error"
-      title={error.kind === 'routing' ? 'API Routing Error' : 'Odysseus API Error'}
-      action={
-        <Button size="xs" variant="outline" onClick={onRetry}>
-          Retry
-        </Button>
-      }
-    >
+    <AlertBanner variant="error" title={error.kind === 'routing' ? 'API Routing Error' : 'Odysseus API Error'} action={<Button size="xs" variant="outline" onClick={onRetry}>Retry</Button>}>
       {error.message}
     </AlertBanner>
   )
@@ -77,14 +56,40 @@ function useShellUiState() {
   const [initialPlaceCoords, setInitialPlaceCoords] = useState<{ lat: number; lng: number } | null>(null)
 
   return {
-    mobileTab, setMobileTab, mapScope, setMapScope, mapLegId, setMapLegId,
-    mapDayId, setMapDayId, tripModalOpen, setTripModalOpen, legModalOpen, setLegModalOpen,
-    itemModalDayId, setItemModalDayId, checklistModalOpen, setChecklistModalOpen,
-    noteModalOpen, setNoteModalOpen, bookingModalOpen, setBookingModalOpen,
-    editingBooking, setEditingBooking, viewingAttachment, setViewingAttachment,
-    placeModalOpen, setPlaceModalOpen, editingPlace, setEditingPlace,
-    initialPlaceCoords, setInitialPlaceCoords,
+    mobileTab, setMobileTab, mapScope, setMapScope, mapLegId, setMapLegId, mapDayId, setMapDayId,
+    tripModalOpen, setTripModalOpen, legModalOpen, setLegModalOpen, itemModalDayId, setItemModalDayId,
+    checklistModalOpen, setChecklistModalOpen, noteModalOpen, setNoteModalOpen,
+    bookingModalOpen, setBookingModalOpen, editingBooking, setEditingBooking,
+    viewingAttachment, setViewingAttachment, placeModalOpen, setPlaceModalOpen,
+    editingPlace, setEditingPlace, initialPlaceCoords, setInitialPlaceCoords,
   }
+}
+
+const AppModalsHost: React.FC<{
+  ui: ReturnType<typeof useShellUiState>
+  state: ReturnType<typeof useOdysseusWorkspace>
+}> = ({ ui, state }) => {
+  const workspace = state.workspace
+  return (
+    <WorkspaceModals
+      tripModalOpen={ui.tripModalOpen} onCloseTripModal={() => ui.setTripModalOpen(false)} onCreateTrip={state.createTrip}
+      legModalOpen={ui.legModalOpen} onCloseLegModal={() => ui.setLegModalOpen(false)} onCreateLeg={state.createLeg}
+      itemModalDayId={ui.itemModalDayId} days={workspace?.days ?? []} places={workspace?.places ?? []}
+      defaultTimezone={workspace?.legs[0]?.base_timezone ?? workspace?.trip.home_timezone ?? 'Pacific/Auckland'}
+      onCloseItemModal={() => ui.setItemModalDayId(undefined)} onCreateItem={state.createItem}
+      checklistModalOpen={ui.checklistModalOpen} onCloseChecklistModal={() => ui.setChecklistModalOpen(false)} onCreateChecklist={state.createChecklist}
+      noteModalOpen={ui.noteModalOpen} legs={workspace?.legs ?? []} onCloseNoteModal={() => ui.setNoteModalOpen(false)} onCreateNote={state.createNote}
+      bookingModalOpen={ui.bookingModalOpen} editingBooking={ui.editingBooking}
+      onCloseBookingModal={() => { ui.setBookingModalOpen(false); ui.setEditingBooking(null) }}
+      onCreateBooking={state.createBooking} onUpdateBooking={state.updateBooking}
+      viewingAttachment={ui.viewingAttachment} attachmentContentUrl={ui.viewingAttachment ? state.attachmentContentUrl(ui.viewingAttachment.id) : ''}
+      onCloseAttachmentViewer={() => ui.setViewingAttachment(null)}
+      placeModalOpen={ui.placeModalOpen} editingPlace={ui.editingPlace} initialPlaceCoords={ui.initialPlaceCoords}
+      onClosePlaceModal={() => { ui.setPlaceModalOpen(false); ui.setEditingPlace(null); ui.setInitialPlaceCoords(null) }}
+      onSearchPlaces={state.searchPlaces} onResolvePlaceUrl={state.resolvePlaceUrl}
+      onCreatePlace={state.createPlace} onUpdatePlace={state.updatePlace}
+    />
+  )
 }
 
 export function App({ adapter }: AppProps) {
@@ -92,25 +97,17 @@ export function App({ adapter }: AppProps) {
   const state = useOdysseusWorkspace(resolvedAdapter)
   const ui = useShellUiState()
   const workspace = state.workspace
-  const activeError = state.loadError ?? state.actionError
 
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground pb-24 lg:pb-8">
       <AppHeader
-        variant="brand"
-        brandIcon={<Compass className="w-4 h-4" />}
-        title="Odysseus"
+        variant="brand" brandIcon={<Compass className="w-4 h-4" />} title="Odysseus"
         subtitle={workspace ? workspace.trip.title : 'Aegean Travel Planner'}
-        isRefreshing={state.isRefreshing}
-        onRefresh={() => void state.refresh()}
-        actions={
-          <Button variant="brand" size="sm" className="min-h-[38px]" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => ui.setTripModalOpen(true)}>
-            New Trip
-          </Button>
-        }
+        isRefreshing={state.isRefreshing} onRefresh={() => void state.refresh()}
+        actions={<Button variant="brand" size="sm" className="min-h-[38px]" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => ui.setTripModalOpen(true)}>New Trip</Button>}
       />
       <main className="flex-1 w-full max-w-[1440px] mx-auto px-3 sm:px-6 lg:px-8 pt-4 space-y-4">
-        <WorkspaceErrorDisplay error={activeError} onRetry={() => void state.refresh()} />
+        <WorkspaceErrorDisplay error={state.loadError ?? state.actionError} onRetry={() => void state.refresh()} />
         {state.isLoading && <LoadingState label="Loading trip workspace..." variant="brand" />}
         {!state.isLoading && !workspace && !state.loadError && (
           <EmptyState
@@ -122,22 +119,15 @@ export function App({ adapter }: AppProps) {
         )}
         {workspace && (
           <WorkspaceViews
-            workspace={workspace}
-            state={state}
-            mobileTab={ui.mobileTab}
-            mapScope={ui.mapScope}
-            onChangeMapScope={ui.setMapScope}
-            mapLegId={ui.mapLegId || workspace.legs[0]?.id || ''}
-            onChangeMapLegId={ui.setMapLegId}
-            mapDayId={ui.mapDayId || workspace.days[0]?.id || ''}
-            onChangeMapDayId={ui.setMapDayId}
-            onOpenNewTrip={() => ui.setTripModalOpen(true)}
-            onOpenNewLeg={() => ui.setLegModalOpen(true)}
-            onOpenNewItem={(dayId) => ui.setItemModalDayId(dayId)}
-            onOpenNewChecklist={() => ui.setChecklistModalOpen(true)}
+            workspace={workspace} state={state} mobileTab={ui.mobileTab}
+            mapScope={ui.mapScope} onChangeMapScope={ui.setMapScope}
+            mapLegId={ui.mapLegId || workspace.legs[0]?.id || ''} onChangeMapLegId={ui.setMapLegId}
+            mapDayId={ui.mapDayId || workspace.days[0]?.id || ''} onChangeMapDayId={ui.setMapDayId}
+            onOpenNewTrip={() => ui.setTripModalOpen(true)} onOpenNewLeg={() => ui.setLegModalOpen(true)}
+            onOpenNewItem={(dayId) => ui.setItemModalDayId(dayId)} onOpenNewChecklist={() => ui.setChecklistModalOpen(true)}
             onOpenNewNote={() => ui.setNoteModalOpen(true)}
             onOpenNewBooking={() => { ui.setEditingBooking(null); ui.setBookingModalOpen(true) }}
-            onEditBooking={(booking) => { ui.setEditingBooking(booking); ui.setBookingModalOpen(true) }}
+            onEditBooking={(b) => { ui.setEditingBooking(b); ui.setBookingModalOpen(true) }}
             onViewAttachment={(att) => ui.setViewingAttachment(att)}
             onOpenAddPlace={(coords) => { ui.setEditingPlace(null); ui.setInitialPlaceCoords(coords ?? null); ui.setPlaceModalOpen(true) }}
             onEditPlace={(place) => { ui.setEditingPlace(place); ui.setInitialPlaceCoords(null); ui.setPlaceModalOpen(true) }}
@@ -145,43 +135,7 @@ export function App({ adapter }: AppProps) {
         )}
       </main>
       <BottomNav hideOnDesktop variant="brand" activeTab={ui.mobileTab} onChangeTab={(id) => ui.setMobileTab(id as MobileTab)} tabs={MOBILE_TABS} />
-      <WorkspaceModals
-        tripModalOpen={ui.tripModalOpen}
-        onCloseTripModal={() => ui.setTripModalOpen(false)}
-        onCreateTrip={state.createTrip}
-        legModalOpen={ui.legModalOpen}
-        onCloseLegModal={() => ui.setLegModalOpen(false)}
-        onCreateLeg={state.createLeg}
-        itemModalDayId={ui.itemModalDayId}
-        days={workspace?.days ?? []}
-        places={workspace?.places ?? []}
-        defaultTimezone={workspace?.legs[0]?.base_timezone ?? workspace?.trip.home_timezone ?? 'Pacific/Auckland'}
-        onCloseItemModal={() => ui.setItemModalDayId(undefined)}
-        onCreateItem={state.createItem}
-        checklistModalOpen={ui.checklistModalOpen}
-        onCloseChecklistModal={() => ui.setChecklistModalOpen(false)}
-        onCreateChecklist={state.createChecklist}
-        noteModalOpen={ui.noteModalOpen}
-        legs={workspace?.legs ?? []}
-        onCloseNoteModal={() => ui.setNoteModalOpen(false)}
-        onCreateNote={state.createNote}
-        bookingModalOpen={ui.bookingModalOpen}
-        editingBooking={ui.editingBooking}
-        onCloseBookingModal={() => { ui.setBookingModalOpen(false); ui.setEditingBooking(null) }}
-        onCreateBooking={state.createBooking}
-        onUpdateBooking={state.updateBooking}
-        viewingAttachment={ui.viewingAttachment}
-        attachmentContentUrl={ui.viewingAttachment ? state.attachmentContentUrl(ui.viewingAttachment.id) : ''}
-        onCloseAttachmentViewer={() => ui.setViewingAttachment(null)}
-        placeModalOpen={ui.placeModalOpen}
-        editingPlace={ui.editingPlace}
-        initialPlaceCoords={ui.initialPlaceCoords}
-        onClosePlaceModal={() => { ui.setPlaceModalOpen(false); ui.setEditingPlace(null); ui.setInitialPlaceCoords(null) }}
-        onSearchPlaces={state.searchPlaces}
-        onResolvePlaceUrl={state.resolvePlaceUrl}
-        onCreatePlace={state.createPlace}
-        onUpdatePlace={state.updatePlace}
-      />
+      <AppModalsHost ui={ui} state={state} />
     </div>
   )
 }

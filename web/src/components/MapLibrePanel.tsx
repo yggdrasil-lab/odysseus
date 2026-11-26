@@ -409,6 +409,41 @@ export interface MapLibrePanelProps {
   onUpdateRouteEstimate: (routeId: string, payload: RouteEstimateUpdatePayload) => Promise<void>
 }
 
+const MapScopeControls: React.FC<{
+  scope: MapScope
+  legs: Leg[]
+  days: Day[]
+  selectedLegId: string
+  selectedDayId: string
+  showBacklog: boolean
+  navProvider: NavProvider
+  onChangeScope: (scope: MapScope) => void
+  onChangeLegId: (legId: string) => void
+  onChangeDayId: (dayId: string) => void
+  onToggleBacklog: (v: boolean) => void
+  onChangeNavProvider: (p: NavProvider) => void
+}> = (p) => (
+  <>
+    <SegmentedControl<MapScope> value={p.scope} onChange={p.onChangeScope} variant="brand" fullWidth idPrefix="map-scope" options={[{ id: 'trip', label: 'All Trip' }, { id: 'leg', label: 'Leg' }, { id: 'day', label: 'Day' }]} />
+    {p.scope === 'leg' && p.legs.length > 0 && (
+      <SelectInput aria-label="Scope map to leg" variant="brand" value={p.selectedLegId} onChange={(e) => p.onChangeLegId(e.target.value)} options={p.legs.map((leg) => ({ value: leg.id, label: `${leg.name} (${leg.primary_city})` }))} />
+    )}
+    {p.scope === 'day' && p.days.length > 0 && (
+      <SelectInput aria-label="Scope map to day" variant="brand" value={p.selectedDayId} onChange={(e) => p.onChangeDayId(e.target.value)} options={p.days.map((day) => ({ value: day.id, label: formatCalendarDayLabel(day.date) }))} />
+    )}
+    <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+      <label className="inline-flex items-center gap-2 min-h-[44px] sm:min-h-[32px] text-foreground cursor-pointer">
+        <input type="checkbox" checked={p.showBacklog} onChange={(e) => p.onToggleBacklog(e.target.checked)} className="w-4 h-4 accent-sky-400" />
+        <span>Show Backlog Pins</span>
+      </label>
+      <div className="inline-flex items-center gap-1 rounded-lg bg-background/70 border border-border/70 p-0.5">
+        <button type="button" onClick={() => p.onChangeNavProvider('google')} className={`px-2 py-1 rounded-md text-[11px] font-semibold min-h-[34px] ${p.navProvider === 'google' ? 'bg-accent text-accent-fg' : 'text-muted'}`}>Google</button>
+        <button type="button" onClick={() => p.onChangeNavProvider('apple')} className={`px-2 py-1 rounded-md text-[11px] font-semibold min-h-[34px] ${p.navProvider === 'apple' ? 'bg-accent text-accent-fg' : 'text-muted'}`}>Apple</button>
+      </div>
+    </div>
+  </>
+)
+
 export const MapLibrePanel: React.FC<MapLibrePanelProps> = (props) => {
   const [showBacklog, setShowBacklog] = useState(true)
   const [dropPinMode, setDropPinMode] = useState(false)
@@ -430,11 +465,6 @@ export const MapLibrePanel: React.FC<MapLibrePanelProps> = (props) => {
   const selectedPlace = placesById.get(selectedPlaceId) ?? visiblePlaces[0] ?? null
   const activeDayId = props.selectedDayId || props.days[0]?.id || ''
 
-  const handleToggleProvider = (provider: NavProvider) => {
-    setNavProvider(provider)
-    writeNavProviderPreference(provider)
-  }
-
   return (
     <GlassCard id="section-places" tone="glass" padding="md" className="space-y-3.5 lg:sticky lg:top-20" data-testid="map-preview-panel">
       <SectionHeader
@@ -453,23 +483,11 @@ export const MapLibrePanel: React.FC<MapLibrePanelProps> = (props) => {
           </div>
         }
       />
-      <SegmentedControl<MapScope> value={props.scope} onChange={props.onChangeScope} variant="brand" fullWidth idPrefix="map-scope" options={[{ id: 'trip', label: 'All Trip' }, { id: 'leg', label: 'Leg' }, { id: 'day', label: 'Day' }]} />
-      {props.scope === 'leg' && props.legs.length > 0 && (
-        <SelectInput aria-label="Scope map to leg" variant="brand" value={props.selectedLegId} onChange={(e) => props.onChangeLegId(e.target.value)} options={props.legs.map((leg) => ({ value: leg.id, label: `${leg.name} (${leg.primary_city})` }))} />
-      )}
-      {props.scope === 'day' && props.days.length > 0 && (
-        <SelectInput aria-label="Scope map to day" variant="brand" value={props.selectedDayId} onChange={(e) => props.onChangeDayId(e.target.value)} options={props.days.map((day) => ({ value: day.id, label: formatCalendarDayLabel(day.date) }))} />
-      )}
-      <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-        <label className="inline-flex items-center gap-2 min-h-[44px] sm:min-h-[32px] text-foreground cursor-pointer">
-          <input type="checkbox" checked={showBacklog} onChange={(e) => setShowBacklog(e.target.checked)} className="w-4 h-4 accent-sky-400" />
-          <span>Show Backlog Pins</span>
-        </label>
-        <div className="inline-flex items-center gap-1 rounded-lg bg-background/70 border border-border/70 p-0.5">
-          <button type="button" onClick={() => handleToggleProvider('google')} className={`px-2 py-1 rounded-md text-[11px] font-semibold min-h-[34px] ${navProvider === 'google' ? 'bg-accent text-accent-fg' : 'text-muted'}`}>Google</button>
-          <button type="button" onClick={() => handleToggleProvider('apple')} className={`px-2 py-1 rounded-md text-[11px] font-semibold min-h-[34px] ${navProvider === 'apple' ? 'bg-accent text-accent-fg' : 'text-muted'}`}>Apple</button>
-        </div>
-      </div>
+      <MapScopeControls
+        scope={props.scope} legs={props.legs} days={props.days} selectedLegId={props.selectedLegId} selectedDayId={props.selectedDayId}
+        showBacklog={showBacklog} navProvider={navProvider} onChangeScope={props.onChangeScope} onChangeLegId={props.onChangeLegId}
+        onChangeDayId={props.onChangeDayId} onToggleBacklog={setShowBacklog} onChangeNavProvider={(p) => { setNavProvider(p); writeNavProviderPreference(p) }}
+      />
       <MapCanvasStage visiblePlaces={visiblePlaces} scopedRoutes={scopedRoutes} stopNumbers={stopNumbers} placesById={placesById} dropPinMode={dropPinMode} onSelectPlace={setSelectedPlaceId} onDropPinAt={(lat, lng) => { setDropPinMode(false); props.onOpenAddPlace({ lat, lng }) }} />
       {visiblePlaces.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
