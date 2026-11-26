@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest'
 
 import type { ItineraryItem, Leg } from '../types'
 import {
+  extractLocalDate,
   extractWallClockHHMM,
   formatCalendarDayLabel,
   formatEventLocalTimeLabel,
+  formatSegmentWallClock,
   legsCoveringDate,
 } from './time'
 
@@ -23,6 +25,7 @@ function makeItem(overrides: Partial<ItineraryItem>): ItineraryItem {
     start_utc: null,
     end_utc: null,
     place_label: null,
+    place_id: null,
     sync_to_chronos: false,
     sort_order: 0,
     notes: null,
@@ -93,5 +96,10 @@ describe('wall-clock time formatting', () => {
       'Harbor City',
       'Island Coast',
     ])
+  })
+
+  it('extracts wall-clock local date and segment time without browser drift', () => {
+    expect(extractLocalDate('2027-01-12T22:15:00')).toBe('2027-01-12')
+    expect(formatSegmentWallClock('2027-01-12T22:15:00', '2027-01-12T09:15:00Z', 'Pacific/Auckland')).toContain('22:15')
   })
 })

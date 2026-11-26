@@ -11,6 +11,7 @@ import type {
   ItineraryItemCreatePayload,
   Leg,
   LegCreatePayload,
+  Place,
   TravelNoteCreatePayload,
   TripCreatePayload,
   TripStatus,
@@ -211,17 +212,19 @@ const ItemScheduleFields: React.FC<{
 export const CreateItemModal: React.FC<{
   isOpen: boolean
   days: Day[]
+  places?: Place[]
   defaultDayId: string | null
   defaultTimezone: string
   onClose: () => void
   onSubmit: (payload: ItineraryItemCreatePayload) => Promise<void>
-}> = ({ isOpen, days, defaultDayId, defaultTimezone, onClose, onSubmit }) => {
+}> = ({ isOpen, days, places = [], defaultDayId, defaultTimezone, onClose, onSubmit }) => {
   const [title, setTitle] = useState('')
   const [dayId, setDayId] = useState<string>(defaultDayId ?? '')
   const [category, setCategory] = useState<ItemCategory>('activity')
   const [itemStatus, setItemStatus] = useState<ItemStatus>('planned')
   const [startLocal, setStartLocal] = useState('')
   const [startTz, setStartTz] = useState(defaultTimezone)
+  const [placeId, setPlaceId] = useState('')
   const [placeLabel, setPlaceLabel] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -239,9 +242,10 @@ export const CreateItemModal: React.FC<{
         day_id: dayId || null, title: title.trim(), category, status: itemStatus,
         start_local: normalized ? (normalized.length === 16 ? `${normalized}:00` : normalized) : null,
         start_tz: normalized ? startTz.trim() || defaultTimezone : null,
+        place_id: placeId || null,
         place_label: placeLabel.trim() || null,
       })
-      setTitle(''); setStartLocal(''); setPlaceLabel('')
+      setTitle(''); setStartLocal(''); setPlaceId(''); setPlaceLabel('')
       onClose()
     } catch (err: unknown) { setErrorMessage(extractModalError(err)) } finally { setSubmitting(false) }
   }
@@ -257,6 +261,22 @@ export const CreateItemModal: React.FC<{
           <SelectInput id="item-day" variant="brand" value={dayId} onChange={(e) => setDayId(e.target.value)} options={[{ value: '', label: 'Unscheduled (Idea Backlog)' }, ...days.map((d) => ({ value: d.id, label: d.date }))]} />
         </FormField>
         <ItemScheduleFields category={category} itemStatus={itemStatus} startLocal={startLocal} startTz={startTz} onChangeCategory={setCategory} onChangeStatus={setItemStatus} onChangeStartLocal={setStartLocal} onChangeStartTz={setStartTz} />
+        {places.length > 0 && (
+          <FormField label="Linked Saved Place (optional)" htmlFor="item-saved-place">
+            <SelectInput
+              id="item-saved-place"
+              variant="brand"
+              value={placeId}
+              onChange={(e) => {
+                const nextId = e.target.value
+                setPlaceId(nextId)
+                const matched = places.find((p) => p.id === nextId)
+                if (matched && !placeLabel.trim()) setPlaceLabel(matched.name)
+              }}
+              options={[{ value: '', label: 'None (free-text label only)' }, ...places.map((p) => ({ value: p.id, label: p.name }))]}
+            />
+          </FormField>
+        )}
         <FormField label="Place Label" htmlFor="item-place">
           <TextInput id="item-place" variant="brand" value={placeLabel} onChange={(e) => setPlaceLabel(e.target.value)} placeholder="Harbor Pier 2" />
         </FormField>

@@ -1,15 +1,13 @@
 import React from 'react'
 
+import { BookingsHubSection } from './components/BookingsHubSection'
 import { ChecklistsAndNotesSection } from './components/ChecklistsAndNotesSection'
 import { LeftJumpRail } from './components/LeftJumpRail'
-import { MapPreviewPanel } from './components/MapPreviewPanel'
-import {
-  BookingsPlaceholderCard,
-  BudgetPlaceholderCard,
-} from './components/PlaceholderSectionCards'
+import { MapLibrePanel } from './components/MapLibrePanel'
+import { BudgetPlaceholderCard } from './components/PlaceholderSectionCards'
 import { TripDocumentTimeline } from './components/TripDocumentTimeline'
 import type { useOdysseusWorkspace } from './hooks/useOdysseusWorkspace'
-import type { ItineraryItem, MapScope, MobileTab, TripWorkspace } from './types'
+import type { Attachment, Booking, ItineraryItem, MapScope, MobileTab, Place, TripWorkspace } from './types'
 
 export interface WorkspaceViewsProps {
   workspace: TripWorkspace
@@ -26,6 +24,11 @@ export interface WorkspaceViewsProps {
   onOpenNewItem: (dayId: string | null) => void
   onOpenNewChecklist: () => void
   onOpenNewNote: () => void
+  onOpenNewBooking: () => void
+  onEditBooking: (booking: Booking) => void
+  onViewAttachment: (attachment: Attachment) => void
+  onOpenAddPlace: (coords?: { lat: number; lng: number }) => void
+  onEditPlace: (place: Place) => void
 }
 
 function buildSectionNodes(props: WorkspaceViewsProps) {
@@ -40,6 +43,8 @@ function buildSectionNodes(props: WorkspaceViewsProps) {
       legs={workspace.legs}
       days={workspace.days}
       items={workspace.itinerary_items}
+      bookings={workspace.bookings}
+      places={workspace.places}
       onSelectTrip={(id) => void state.selectTrip(id)}
       onOpenNewTrip={props.onOpenNewTrip}
       onOpenNewLeg={props.onOpenNewLeg}
@@ -47,6 +52,18 @@ function buildSectionNodes(props: WorkspaceViewsProps) {
       onToggleItemDone={handleToggleDone}
       onMoveItemDay={(itemId, dayId) => state.updateItem(itemId, { day_id: dayId })}
       onDeleteItem={state.deleteItem}
+    />
+  )
+  const bookingsNode = (
+    <BookingsHubSection
+      bookings={workspace.bookings}
+      attachments={workspace.attachments}
+      onOpenNewBooking={props.onOpenNewBooking}
+      onEditBooking={props.onEditBooking}
+      onDeleteBooking={state.deleteBooking}
+      onUploadAttachment={state.uploadAttachment}
+      onDeleteAttachment={state.deleteAttachment}
+      onViewAttachment={props.onViewAttachment}
     />
   )
   const listsNode = (
@@ -63,24 +80,31 @@ function buildSectionNodes(props: WorkspaceViewsProps) {
     />
   )
   const mapNode = (
-    <MapPreviewPanel
+    <MapLibrePanel
       legs={workspace.legs}
       days={workspace.days}
       items={workspace.itinerary_items}
+      places={workspace.places}
+      routeEstimates={workspace.route_estimates}
       scope={props.mapScope}
       onChangeScope={props.onChangeMapScope}
       selectedLegId={props.mapLegId}
       onChangeLegId={props.onChangeMapLegId}
       selectedDayId={props.mapDayId}
       onChangeDayId={props.onChangeMapDayId}
+      onOpenAddPlace={props.onOpenAddPlace}
+      onEditPlace={props.onEditPlace}
+      onDeletePlace={state.deletePlace}
+      onComputeDayRoutes={state.computeDayRoutes}
+      onUpdateRouteEstimate={state.updateRouteEstimate}
     />
   )
-  return { timelineNode, listsNode, mapNode }
+  return { timelineNode, bookingsNode, listsNode, mapNode }
 }
 
 export const WorkspaceViews: React.FC<WorkspaceViewsProps> = (props) => {
   const { workspace, mobileTab } = props
-  const { timelineNode, listsNode, mapNode } = buildSectionNodes(props)
+  const { timelineNode, bookingsNode, listsNode, mapNode } = buildSectionNodes(props)
 
   return (
     <>
@@ -90,6 +114,8 @@ export const WorkspaceViews: React.FC<WorkspaceViewsProps> = (props) => {
       >
         <LeftJumpRail
           legs={workspace.legs}
+          bookingCount={workspace.bookings.length}
+          placeCount={workspace.places.length}
           backlogCount={workspace.itinerary_items.filter((i) => i.day_id === null).length}
           checklistCount={workspace.checklists.length}
           noteCount={workspace.travel_notes.length}
@@ -100,7 +126,7 @@ export const WorkspaceViews: React.FC<WorkspaceViewsProps> = (props) => {
         />
         <div className="space-y-4 min-w-0">
           {timelineNode}
-          <BookingsPlaceholderCard />
+          {bookingsNode}
           {listsNode}
           <BudgetPlaceholderCard budgetNzd={workspace.trip.budget_nzd} />
         </div>
@@ -110,7 +136,7 @@ export const WorkspaceViews: React.FC<WorkspaceViewsProps> = (props) => {
       <div data-testid="mobile-workspace" className="lg:hidden space-y-4">
         {mobileTab === 'itinerary' && timelineNode}
         {mobileTab === 'map' && mapNode}
-        {mobileTab === 'bookings' && <BookingsPlaceholderCard />}
+        {mobileTab === 'bookings' && bookingsNode}
         {mobileTab === 'lists' && listsNode}
         {mobileTab === 'budget' && <BudgetPlaceholderCard budgetNzd={workspace.trip.budget_nzd} />}
       </div>

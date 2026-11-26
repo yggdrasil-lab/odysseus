@@ -1,0 +1,207 @@
+import React, { useEffect, useRef, useState } from 'react'
+import { ChevronLeft, ChevronRight, Download, ZoomIn, ZoomOut } from 'lucide-react'
+import * as pdfjsLib from 'pdfjs-dist'
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+import { AlertBanner, Button, LoadingState, Modal } from '@yggdrasil-lab/ui'
+
+import type { Attachment } from '../types'
+import { formatBytesCompact } from '../utils/maps'
+
+if (pdfjsLib.GlobalWorkerOptions) {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
+}
+
+interface PdfViewerModalProps {
+  attachment: Attachment | null
+  contentUrl: string
+  onClose: () => void
+}
+
+async function fetchPdfBytes(contentUrl: string, signal: AbortSignal): Promise<ArrayBuffer> {
+  const response = await fetch(contentUrl, { signal, cache: 'no-store' })
+  if (!response.ok) {
+    throw new Error(`Unable to fetch PDF (${response.status} ${response.statusText})`)
+  }
+  return response.arrayBuffer()
+}
+
+export const PdfViewerModal: React.FC<PdfViewerModalProps> = ({
+  attachment,
+  contentUrl,
+  onClose,
+}) => {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const [pdfDoc, setPdfDoc] = useState<pdfjsLib.PDFDocumentProxy | null>(null)
+  const [pageNumber, setPageNumber] = useState(1)
+  const [numPages, setNumPages] = useState(0)
+  const [scale, setScale] = useState(1.1)
+  const [loading, setLoading] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+
+  const isPdf = attachment?.mime_type === 'application/pdf'
+
+  useEffect(() => {
+    if (!attachment || !isPdf || !contentUrl) {
+      setPdfDoc(null)
+      setNumPages(0)
+      setPageNumber(1)
+      setErrorMessage(null)
+      return
+    }
+    const controller = new AbortController()
+    let active = true
+    setLoading(true)
+    setErrorMessage(null)
+    setPageNumber(1)
+    void (async () => {
+      try {
+        const bytes = await fetchPdfBytes(contentUrl, controller.signal)
+        const doc = await pdfjsLib.getDocument({ data: bytes }).promise
+        if (!active) {
+          await doc.destroy()
+          return
+        }
+        setPdfDoc(doc)
+        setNumPages(doc.numPages)
+      } catch (err: unknown) {
+        if (!controller.signal.aborted && active) {
+          setErrorMessage(err instanceof Error ? err.message : 'Unable to render PDF document.')
+        }
+      } finally {
+        if (active) setLoading(false)
+      }
+    })()
+
+    return () => {
+      active = false
+      controller.abort()
+    }
+  }, [attachment, contentUrl, isPdf])
+
+  useEffect(() => {
+    if (!pdfDoc || !canvasRef.current) return
+    let cancelled = false
+    let renderTask: pdfjsLib.RenderTask | null = null
+    void (async () => {
+      try {
+        const page = await pdfDoc.getPage(pageNumber)
+        if (cancelled || !canvasRef.current) return
+        const viewport = page.getViewport({ scale })
+        const canvas = canvasRef.current
+        const context = canvas.getContext('2d')
+        if (!context) {
+          setErrorMessage('Canvas 2D rendering context unavailable.')
+          return
+        }
+        canvas.height = viewport.height
+        canvas.width = viewport.width
+        renderTask = page.render({ canvasContext: context, viewport })
+        await renderTask.promise
+      } catch (err: unknown) {
+        if (!cancelled) {
+          const name = err instanceof Error ? err.name : ''
+          if (name !== 'RenderingCancelledException') {
+            setErrorMessage(err instanceof Error ? err.message : 'PDF page render failed.')
+          }
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+      renderTask?.cancel()
+    }
+  }, [pageNumber, pdfDoc, scale])
+
+  if (!attachment) return null
+
+  return (
+    <Modal
+      isOpen={Boolean(attachment)}
+      onClose={onClose}
+      title={attachment.filename}
+      subtitle={`${attachment.mime_type} · ${formatBytesCompact(attachment.size_bytes)}`}
+      className="max-w-3xl"
+    >
+      <div data-testid="pdf-viewer-modal" className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-ui-control bg-background/70 border border-border/80 px-3 py-2">
+          {isPdf ? (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Button
+                variant="outline"
+                size="xs"
+                className="min-h-[44px] sm:min-h-[34px]"
+                disabled={pageNumber <= 1 || loading}
+                icon={<ChevronLeft className="w-3.5 h-3.5" />}
+                onClick={() => setPageNumber((p) => Math.max(1, p - 1))}
+              >
+                Prev
+              </Button>
+              <span className="px-2 text-xs font-mono text-foreground">
+                Page {numPages > 0 ? pageNumber : 0} / {numPages}
+              </span>
+              <Button
+                variant="outline"
+                size="xs"
+                className="min-h-[44px] sm:min-h-[34px]"
+                disabled={pageNumber >= numPages || loading}
+                icon={<ChevronRight className="w-3.5 h-3.5" />}
+                onClick={() => setPageNumber((p) => Math.min(numPages, p + 1))}
+              >
+                Next
+              </Button>
+              <Button
+                variant="ghost"
+                size="xs"
+                aria-label="Zoom out PDF"
+                className="min-h-[44px] sm:min-h-[34px]"
+                icon={<ZoomOut className="w-3.5 h-3.5" />}
+                onClick={() => setScale((s) => Math.max(0.6, Number((s - 0.2).toFixed(2))))}
+              />
+              <Button
+                variant="ghost"
+                size="xs"
+                aria-label="Zoom in PDF"
+                className="min-h-[44px] sm:min-h-[34px]"
+                icon={<ZoomIn className="w-3.5 h-3.5" />}
+                onClick={() => setScale((s) => Math.min(2.2, Number((s + 0.2).toFixed(2))))}
+              />
+            </div>
+          ) : (
+            <span className="text-xs text-muted">Inline image preview</span>
+          )}
+
+          <a
+            href={contentUrl}
+            download={attachment.filename}
+            className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-accent text-accent-fg text-xs font-semibold min-h-[44px] sm:min-h-[36px] hover:opacity-90 transition-opacity"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Download</span>
+          </a>
+        </div>
+
+        {errorMessage && (
+          <AlertBanner variant="error" title="Document render error">
+            {errorMessage}
+          </AlertBanner>
+        )}
+
+        {loading && <LoadingState label="Rendering PDF pages..." variant="brand" />}
+
+        {isPdf ? (
+          <div className="overflow-auto rounded-ui-control border border-border/80 bg-slate-950/80 p-3 flex justify-center min-h-[260px]">
+            <canvas ref={canvasRef} data-testid="pdf-viewer-canvas" className="max-w-full h-auto" />
+          </div>
+        ) : (
+          <div className="overflow-auto rounded-ui-control border border-border/80 bg-slate-950/80 p-3 flex justify-center">
+            <img
+              src={contentUrl}
+              alt={attachment.filename}
+              className="max-w-full max-h-[60vh] object-contain rounded"
+            />
+          </div>
+        )}
+      </div>
+    </Modal>
+  )
+}

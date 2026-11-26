@@ -5,6 +5,8 @@ import {
   Clock,
   Inbox,
   MapPin,
+  PlaneLanding,
+  PlaneTakeoff,
   Plus,
   Route,
   Trash2,
@@ -19,10 +21,21 @@ import {
   type StatusBadgeVariant,
 } from '@yggdrasil-lab/ui'
 
-import type { Day, ItineraryItem, Leg, Trip, TripStatus } from '../types'
+import type {
+  Booking,
+  BookingSegment,
+  Day,
+  ItineraryItem,
+  Leg,
+  Place,
+  Trip,
+  TripStatus,
+} from '../types'
 import {
+  extractLocalDate,
   formatCalendarDayLabel,
   formatEventLocalTimeLabel,
+  formatSegmentWallClock,
   legsCoveringDate,
 } from '../utils/time'
 
@@ -40,6 +53,8 @@ export interface TripDocumentTimelineProps {
   legs: Leg[]
   days: Day[]
   items: ItineraryItem[]
+  bookings?: Booking[]
+  places?: Place[]
   onSelectTrip: (tripId: string) => void
   onOpenNewTrip: () => void
   onOpenNewLeg: () => void
@@ -49,14 +64,62 @@ export interface TripDocumentTimelineProps {
   onDeleteItem: (itemId: string) => Promise<void>
 }
 
+interface DaySegmentEntry {
+  booking: Booking
+  segment: BookingSegment
+  kind: 'departure' | 'arrival'
+}
+
+const SegmentTimelineRow: React.FC<{ entry: DaySegmentEntry }> = ({ entry }) => {
+  const { booking, segment, kind } = entry
+  const origin = segment.origin_code ?? segment.origin_label
+  const dest = segment.destination_code ?? segment.destination_label
+  const timeText =
+    kind === 'departure'
+      ? formatSegmentWallClock(segment.departure_local, segment.departure_utc, segment.departure_tz)
+      : formatSegmentWallClock(segment.arrival_local, segment.arrival_utc, segment.arrival_tz)
+
+  return (
+    <div
+      data-testid={`day-${kind}-${segment.id}`}
+      className="flex flex-wrap items-center justify-between gap-2 rounded-ui-control bg-card/65 border border-sky-500/30 px-3 py-2 text-xs"
+    >
+      <div className="flex flex-wrap items-center gap-2 min-w-0">
+        {kind === 'departure' ? (
+          <PlaneTakeoff className="w-3.5 h-3.5 text-accent shrink-0" />
+        ) : (
+          <PlaneLanding className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+        )}
+        <span className="font-semibold text-foreground truncate">
+          {kind === 'arrival' ? `Arrival: ${booking.title}` : booking.title}
+        </span>
+        <span className="font-mono text-[11px] text-muted">
+          {origin} -&gt; {dest}
+        </span>
+        {segment.day_offset > 0 && (
+          <StatusBadge label={`+${segment.day_offset}`} variant="warning" size="xs" showDot={false} />
+        )}
+        {Boolean(booking.confirmation_code) && (
+          <span className="px-1.5 py-0.5 rounded bg-background border border-border font-mono text-[10px] text-accent">
+            {booking.confirmation_code}
+          </span>
+        )}
+      </div>
+      <span className="font-mono text-[11px] text-accent shrink-0">{timeText}</span>
+    </div>
+  )
+}
+
 const ScheduledItemRow: React.FC<{
   item: ItineraryItem
+  linkedPlace?: Place
   onToggleDone: (item: ItineraryItem) => Promise<void>
   onMoveToBacklog: (itemId: string) => Promise<void>
   onDelete: (itemId: string) => Promise<void>
-}> = ({ item, onToggleDone, onMoveToBacklog, onDelete }) => {
+}> = ({ item, linkedPlace, onToggleDone, onMoveToBacklog, onDelete }) => {
   const timeLabel = formatEventLocalTimeLabel(item)
   const isDone = item.status === 'done'
+  const placeDisplay = linkedPlace?.name ?? item.place_label
   return (
     <div
       data-testid={`itinerary-item-${item.id}`}
@@ -85,10 +148,10 @@ const ScheduledItemRow: React.FC<{
               <span>{timeLabel}</span>
             </span>
           )}
-          {Boolean(item.place_label) && (
+          {Boolean(placeDisplay) && (
             <span className="inline-flex items-center gap-1">
-              <MapPin className="w-3 h-3 shrink-0" />
-              <span>{item.place_label}</span>
+              <MapPin className="w-3 h-3 shrink-0 text-accent" />
+              <span>{placeDisplay}</span>
             </span>
           )}
         </div>
@@ -252,6 +315,8 @@ const DayCard: React.FC<{
   day: Day
   coveringLegs: Leg[]
   dayItems: ItineraryItem[]
+  daySegments: DaySegmentEntry[]
+  placesById: Map<string, Place>
   onOpenNewItem: (dayId: string) => void
   onToggleItemDone: (item: ItineraryItem) => Promise<void>
   onMoveToBacklog: (itemId: string) => Promise<void>
@@ -260,6 +325,8 @@ const DayCard: React.FC<{
   day,
   coveringLegs,
   dayItems,
+  daySegments,
+  placesById,
   onOpenNewItem,
   onToggleItemDone,
   onMoveToBacklog,
@@ -300,20 +367,34 @@ const DayCard: React.FC<{
       </Button>
     </div>
 
-    {dayItems.length === 0 ? (
-      <p className="text-xs text-muted italic">No scheduled items for this day.</p>
-    ) : (
-      <div className="space-y-2">
-        {dayItems.map((item) => (
-          <ScheduledItemRow
-            key={item.id}
-            item={item}
-            onToggleDone={onToggleItemDone}
-            onMoveToBacklog={onMoveToBacklog}
-            onDelete={onDeleteItem}
+    {daySegments.length > 0 && (
+      <div className="space-y-1.5">
+        {daySegments.map((entry) => (
+          <SegmentTimelineRow
+            key={`${entry.kind}-${entry.segment.id}`}
+            entry={entry}
           />
         ))}
       </div>
+    )}
+
+    {dayItems.length === 0 && daySegments.length === 0 ? (
+      <p className="text-xs text-muted italic">No scheduled items for this day.</p>
+    ) : (
+      dayItems.length > 0 && (
+        <div className="space-y-2">
+          {dayItems.map((item) => (
+            <ScheduledItemRow
+              key={item.id}
+              item={item}
+              linkedPlace={item.place_id ? placesById.get(item.place_id) : undefined}
+              onToggleDone={onToggleItemDone}
+              onMoveToBacklog={onMoveToBacklog}
+              onDelete={onDeleteItem}
+            />
+          ))}
+        </div>
+      )
     )}
   </section>
 )
@@ -400,8 +481,29 @@ const BacklogSectionCard: React.FC<{
   </GlassCard>
 )
 
+function buildDaySegmentsMap(bookings: Booking[]): Map<string, DaySegmentEntry[]> {
+  const map = new Map<string, DaySegmentEntry[]>()
+  const append = (date: string | null, entry: DaySegmentEntry) => {
+    if (!date) return
+    const list = map.get(date) ?? []
+    list.push(entry)
+    map.set(date, list)
+  }
+  for (const booking of bookings) {
+    for (const segment of booking.segments) {
+      append(extractLocalDate(segment.departure_local), { booking, segment, kind: 'departure' })
+      if (segment.projected_arrival_date) {
+        append(segment.projected_arrival_date, { booking, segment, kind: 'arrival' })
+      }
+    }
+  }
+  return map
+}
+
 export const TripDocumentTimeline: React.FC<TripDocumentTimelineProps> = (props) => {
   const backlogItems = props.items.filter((item) => item.day_id === null)
+  const placesById = new Map((props.places ?? []).map((p) => [p.id, p]))
+  const segmentsByDate = buildDaySegmentsMap(props.bookings ?? [])
   return (
     <div className="space-y-4">
       <TripOverviewCard
@@ -443,6 +545,8 @@ export const TripDocumentTimeline: React.FC<TripDocumentTimelineProps> = (props)
                 day={day}
                 coveringLegs={legsCoveringDate(props.legs, day.date)}
                 dayItems={props.items.filter((item) => item.day_id === day.id)}
+                daySegments={segmentsByDate.get(day.date) ?? []}
+                placesById={placesById}
                 onOpenNewItem={(dayId) => props.onOpenNewItem(dayId)}
                 onToggleItemDone={props.onToggleItemDone}
                 onMoveToBacklog={(itemId) => props.onMoveItemDay(itemId, null)}

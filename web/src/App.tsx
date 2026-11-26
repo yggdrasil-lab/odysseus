@@ -22,7 +22,7 @@ import { OdysseusHttpAdapter, type OdysseusApiAdapter } from './api/client'
 import { WorkspaceViews } from './WorkspaceViews'
 import { WorkspaceModals } from './components/WorkspaceModals'
 import { useOdysseusWorkspace, type WorkspaceErrorState } from './hooks/useOdysseusWorkspace'
-import type { MapScope, MobileTab } from './types'
+import type { Attachment, Booking, MapScope, MobileTab, Place } from './types'
 
 export interface AppProps {
   adapter?: OdysseusApiAdapter
@@ -69,11 +69,21 @@ function useShellUiState() {
   const [itemModalDayId, setItemModalDayId] = useState<string | null | undefined>(undefined)
   const [checklistModalOpen, setChecklistModalOpen] = useState(false)
   const [noteModalOpen, setNoteModalOpen] = useState(false)
+  const [bookingModalOpen, setBookingModalOpen] = useState(false)
+  const [editingBooking, setEditingBooking] = useState<Booking | null>(null)
+  const [viewingAttachment, setViewingAttachment] = useState<Attachment | null>(null)
+  const [placeModalOpen, setPlaceModalOpen] = useState(false)
+  const [editingPlace, setEditingPlace] = useState<Place | null>(null)
+  const [initialPlaceCoords, setInitialPlaceCoords] = useState<{ lat: number; lng: number } | null>(null)
+
   return {
     mobileTab, setMobileTab, mapScope, setMapScope, mapLegId, setMapLegId,
     mapDayId, setMapDayId, tripModalOpen, setTripModalOpen, legModalOpen, setLegModalOpen,
     itemModalDayId, setItemModalDayId, checklistModalOpen, setChecklistModalOpen,
-    noteModalOpen, setNoteModalOpen,
+    noteModalOpen, setNoteModalOpen, bookingModalOpen, setBookingModalOpen,
+    editingBooking, setEditingBooking, viewingAttachment, setViewingAttachment,
+    placeModalOpen, setPlaceModalOpen, editingPlace, setEditingPlace,
+    initialPlaceCoords, setInitialPlaceCoords,
   }
 }
 
@@ -126,6 +136,11 @@ export function App({ adapter }: AppProps) {
             onOpenNewItem={(dayId) => ui.setItemModalDayId(dayId)}
             onOpenNewChecklist={() => ui.setChecklistModalOpen(true)}
             onOpenNewNote={() => ui.setNoteModalOpen(true)}
+            onOpenNewBooking={() => { ui.setEditingBooking(null); ui.setBookingModalOpen(true) }}
+            onEditBooking={(booking) => { ui.setEditingBooking(booking); ui.setBookingModalOpen(true) }}
+            onViewAttachment={(att) => ui.setViewingAttachment(att)}
+            onOpenAddPlace={(coords) => { ui.setEditingPlace(null); ui.setInitialPlaceCoords(coords ?? null); ui.setPlaceModalOpen(true) }}
+            onEditPlace={(place) => { ui.setEditingPlace(place); ui.setInitialPlaceCoords(null); ui.setPlaceModalOpen(true) }}
           />
         )}
       </main>
@@ -139,6 +154,7 @@ export function App({ adapter }: AppProps) {
         onCreateLeg={state.createLeg}
         itemModalDayId={ui.itemModalDayId}
         days={workspace?.days ?? []}
+        places={workspace?.places ?? []}
         defaultTimezone={workspace?.legs[0]?.base_timezone ?? workspace?.trip.home_timezone ?? 'Pacific/Auckland'}
         onCloseItemModal={() => ui.setItemModalDayId(undefined)}
         onCreateItem={state.createItem}
@@ -149,6 +165,22 @@ export function App({ adapter }: AppProps) {
         legs={workspace?.legs ?? []}
         onCloseNoteModal={() => ui.setNoteModalOpen(false)}
         onCreateNote={state.createNote}
+        bookingModalOpen={ui.bookingModalOpen}
+        editingBooking={ui.editingBooking}
+        onCloseBookingModal={() => { ui.setBookingModalOpen(false); ui.setEditingBooking(null) }}
+        onCreateBooking={state.createBooking}
+        onUpdateBooking={state.updateBooking}
+        viewingAttachment={ui.viewingAttachment}
+        attachmentContentUrl={ui.viewingAttachment ? state.attachmentContentUrl(ui.viewingAttachment.id) : ''}
+        onCloseAttachmentViewer={() => ui.setViewingAttachment(null)}
+        placeModalOpen={ui.placeModalOpen}
+        editingPlace={ui.editingPlace}
+        initialPlaceCoords={ui.initialPlaceCoords}
+        onClosePlaceModal={() => { ui.setPlaceModalOpen(false); ui.setEditingPlace(null); ui.setInitialPlaceCoords(null) }}
+        onSearchPlaces={state.searchPlaces}
+        onResolvePlaceUrl={state.resolvePlaceUrl}
+        onCreatePlace={state.createPlace}
+        onUpdatePlace={state.updatePlace}
       />
     </div>
   )

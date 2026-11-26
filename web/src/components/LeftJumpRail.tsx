@@ -5,6 +5,7 @@ import {
   Compass,
   FileText,
   Inbox,
+  MapPin,
   Ticket,
   Wallet,
 } from 'lucide-react'
@@ -14,6 +15,8 @@ import type { Leg } from '../types'
 
 interface LeftJumpRailProps {
   legs: Leg[]
+  bookingCount: number
+  placeCount: number
   backlogCount: number
   checklistCount: number
   noteCount: number
@@ -29,6 +32,8 @@ interface RailLink {
 
 export const LeftJumpRail: React.FC<LeftJumpRailProps> = ({
   legs,
+  bookingCount,
+  placeCount,
   backlogCount,
   checklistCount,
   noteCount,
@@ -36,8 +41,9 @@ export const LeftJumpRail: React.FC<LeftJumpRailProps> = ({
 }) => {
   const sections: RailLink[] = [
     { href: '#section-overview', label: 'Overview & Legs', icon: <Compass className="w-3.5 h-3.5" /> },
-    { href: '#section-bookings', label: 'Bookings', icon: <Ticket className="w-3.5 h-3.5" />, badge: 'T04' },
     { href: '#section-timeline', label: 'Timeline', icon: <CalendarDays className="w-3.5 h-3.5" /> },
+    { href: '#section-bookings', label: 'Bookings', icon: <Ticket className="w-3.5 h-3.5" />, badge: bookingCount },
+    { href: '#section-places', label: 'Map & Places', icon: <MapPin className="w-3.5 h-3.5" />, badge: placeCount },
     { href: '#section-backlog', label: 'Backlog', icon: <Inbox className="w-3.5 h-3.5" />, badge: backlogCount },
     { href: '#section-checklists', label: 'Checklists', icon: <CheckSquare className="w-3.5 h-3.5" />, badge: checklistCount },
     { href: '#section-notes', label: 'Travel Notes', icon: <FileText className="w-3.5 h-3.5" />, badge: noteCount },

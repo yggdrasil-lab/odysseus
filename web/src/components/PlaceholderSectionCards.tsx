@@ -1,21 +1,6 @@
 import React from 'react'
-import { Ticket, Wallet } from 'lucide-react'
+import { Wallet } from 'lucide-react'
 import { GlassCard, SectionHeader, StatusBadge } from '@yggdrasil-lab/ui'
-
-export const BookingsPlaceholderCard: React.FC = () => (
-  <GlassCard id="section-bookings" tone="glass" padding="md" className="space-y-3">
-    <SectionHeader
-      title="Bookings & Confirmations"
-      subtitle="Flights, ferries, rail passes, and lodging vouchers"
-      icon={<Ticket className="w-4 h-4" />}
-      variant="brand"
-      actions={<StatusBadge label="Ticket 04" variant="info" size="xs" />}
-    />
-    <p className="text-xs text-muted leading-relaxed">
-      Centralized booking segments, PNR codes, check-in windows, and offline document attachments arrive in Ticket 04.
-    </p>
-  </GlassCard>
-)
 
 interface BudgetPlaceholderCardProps {
   budgetNzd: string | null

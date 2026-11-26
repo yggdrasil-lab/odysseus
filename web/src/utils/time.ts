@@ -71,3 +71,25 @@ export function formatCalendarDayLabel(isoDate: string): string {
 export function legsCoveringDate(legs: Leg[], isoDate: string): Leg[] {
   return legs.filter((leg) => leg.start_date <= isoDate && isoDate <= leg.end_date)
 }
+
+/**
+ * Extract the calendar YYYY-MM-DD portion directly from a wall-clock ISO timestamp.
+ */
+export function extractLocalDate(localIso: string | null): string | null {
+  if (!localIso) return null
+  const datePart = localIso.split('T')[0]
+  return /^\d{4}-\d{2}-\d{2}$/.test(datePart) ? datePart : null
+}
+
+/**
+ * Format a wall-clock HH:MM + timezone label for booking segments without browser TZ drift.
+ */
+export function formatSegmentWallClock(
+  localIso: string,
+  utcIso: string | null,
+  ianaTimezone: string,
+): string {
+  const hm = extractWallClockHHMM(localIso) ?? localIso
+  const tzCode = formatEventTimezoneCode(utcIso, ianaTimezone)
+  return tzCode ? `${hm} ${tzCode}` : hm
+}

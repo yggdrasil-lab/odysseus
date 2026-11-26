@@ -1,11 +1,16 @@
 import type { OdysseusApiAdapter } from '../api/client'
 import type {
+  BookingCreatePayload,
+  BookingUpdatePayload,
   ChecklistCreatePayload,
   ChecklistItem,
   ChecklistItemCreatePayload,
   ItineraryItemCreatePayload,
   ItineraryItemUpdatePayload,
   LegCreatePayload,
+  PlaceCreatePayload,
+  PlaceUpdatePayload,
+  RouteEstimateUpdatePayload,
   TravelNoteCreatePayload,
   TripCreatePayload,
 } from '../types'
@@ -74,6 +79,42 @@ export function buildWorkspaceActions({
     deleteNote: (noteId: string) =>
       runMutation(async (tripId) => {
         await adapter.deleteNote(tripId, noteId)
+      }),
+    createBooking: (payload: BookingCreatePayload) =>
+      runMutation(async (tripId) => {
+        await adapter.createBooking(tripId, payload)
+      }),
+    updateBooking: (bookingId: string, payload: BookingUpdatePayload) =>
+      runMutation(async (tripId) => {
+        await adapter.updateBooking(tripId, bookingId, payload)
+      }),
+    deleteBooking: (bookingId: string) =>
+      runMutation(async (tripId) => {
+        await adapter.deleteBooking(tripId, bookingId)
+      }),
+    uploadAttachment: (file: File, bookingId?: string | null) =>
+      runMutation(async (tripId) => {
+        await adapter.uploadAttachment(tripId, file, bookingId)
+      }),
+    deleteAttachment: (attachmentId: string) =>
+      runMutation(async (tripId) => {
+        await adapter.deleteAttachment(tripId, attachmentId)
+      }),
+    createPlace: (payload: PlaceCreatePayload) =>
+      runMutation(async (tripId) => {
+        await adapter.createPlace(tripId, payload)
+      }),
+    updatePlace: (placeId: string, payload: PlaceUpdatePayload) =>
+      runMutation(async (tripId) => {
+        await adapter.updatePlace(tripId, placeId, payload)
+      }),
+    deletePlace: (placeId: string) =>
+      runMutation(async (tripId) => {
+        await adapter.deletePlace(tripId, placeId)
+      }),
+    updateRouteEstimate: (routeId: string, payload: RouteEstimateUpdatePayload) =>
+      runMutation(async (tripId) => {
+        await adapter.updateRouteEstimate(tripId, routeId, payload)
       }),
   }
 }

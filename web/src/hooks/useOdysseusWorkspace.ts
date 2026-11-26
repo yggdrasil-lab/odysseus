@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { ApiRoutingError, SessionExpiredError, type OdysseusApiAdapter } from '../api/client'
-import type { Trip, TripWorkspace } from '../types'
+import type { DayRoutesComputeResponse, TravelMode, Trip, TripWorkspace } from '../types'
 import { buildWorkspaceActions } from './workspaceActions'
 
 export interface WorkspaceErrorState {
@@ -137,6 +137,50 @@ export function useOdysseusWorkspace(adapter: OdysseusApiAdapter) {
     await queries.reloadWorkspace(queries.selectedTripId)
   }, [queries.hydrateTrips, queries.reloadWorkspace, queries.selectedTripId])
 
+  const searchPlaces = useCallback(
+    async (query: string) => {
+      if (!queries.selectedTripId) return []
+      return adapter.searchPlaces(queries.selectedTripId, query)
+    },
+    [adapter, queries.selectedTripId],
+  )
+
+  const resolvePlaceUrl = useCallback(
+    async (url: string) => {
+      if (!queries.selectedTripId) {
+        throw new Error('Select a trip before resolving map links.')
+      }
+      return adapter.resolvePlaceUrl(queries.selectedTripId, url)
+    },
+    [adapter, queries.selectedTripId],
+  )
+
+  const computeDayRoutes = useCallback(
+    async (dayId: string, travelMode: TravelMode): Promise<DayRoutesComputeResponse> => {
+      if (!queries.selectedTripId) {
+        throw new Error('Select a trip before computing routes.')
+      }
+      setActionError(null)
+      try {
+        const result = await adapter.computeDayRoutes(queries.selectedTripId, dayId, travelMode)
+        await queries.reloadWorkspace(queries.selectedTripId)
+        return result
+      } catch (err: unknown) {
+        setActionError(classifyError(err))
+        throw err
+      }
+    },
+    [adapter, queries.reloadWorkspace, queries.selectedTripId],
+  )
+
+  const attachmentContentUrl = useCallback(
+    (attachmentId: string): string => {
+      if (!queries.selectedTripId) return ''
+      return adapter.attachmentContentUrl(queries.selectedTripId, attachmentId)
+    },
+    [adapter, queries.selectedTripId],
+  )
+
   return {
     trips: queries.trips,
     selectedTripId: queries.selectedTripId,
@@ -148,6 +192,10 @@ export function useOdysseusWorkspace(adapter: OdysseusApiAdapter) {
     clearActionError: () => setActionError(null),
     selectTrip,
     refresh,
+    searchPlaces,
+    resolvePlaceUrl,
+    computeDayRoutes,
+    attachmentContentUrl,
     ...actions,
   }
 }
