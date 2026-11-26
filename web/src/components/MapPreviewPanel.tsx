@@ -47,20 +47,77 @@ function filterItemsForScope(
   return items.filter((item) => item.day_id !== null)
 }
 
-export const MapPreviewPanel: React.FC<MapPreviewPanelProps> = ({
-  legs,
-  days,
-  items,
+const MapStopRow: React.FC<{ item: ItineraryItem; index: number }> = ({ item, index }) => {
+  const localLabel = formatEventLocalTimeLabel(item)
+  return (
+    <div className="flex items-center justify-between gap-2 rounded-lg bg-card/85 border border-border/70 px-2.5 py-2 text-xs">
+      <div className="flex items-center gap-2 min-w-0">
+        <span className="w-5 h-5 rounded-full bg-accent/20 text-accent font-mono text-[11px] font-bold flex items-center justify-center shrink-0">
+          {index + 1}
+        </span>
+        <div className="min-w-0">
+          <p className="font-semibold text-foreground truncate">{item.title}</p>
+          {Boolean(item.place_label) && (
+            <p className="text-[11px] text-muted truncate flex items-center gap-1">
+              <MapPin className="w-3 h-3 text-accent shrink-0" />
+              <span>{item.place_label}</span>
+            </p>
+          )}
+        </div>
+      </div>
+      {Boolean(localLabel) && (
+        <span className="text-[10px] font-mono text-muted shrink-0">{localLabel}</span>
+      )}
+    </div>
+  )
+}
+
+const MapCanvasPreview: React.FC<{ scope: MapScope; scopedItems: ItineraryItem[] }> = ({
   scope,
-  onChangeScope,
-  selectedLegId,
-  onChangeLegId,
-  selectedDayId,
-  onChangeDayId,
-}) => {
+  scopedItems,
+}) => (
+  <div
+    className="relative overflow-hidden rounded-ui-control border border-border/80 bg-[#0b1623] p-4 min-h-[240px] flex flex-col justify-between"
+    style={{
+      backgroundImage:
+        'radial-gradient(circle at 75% 20%, rgba(56, 189, 248, 0.18), transparent 52%), linear-gradient(rgba(56, 189, 248, 0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(56, 189, 248, 0.06) 1px, transparent 1px)',
+      backgroundSize: '100% 100%, 24px 24px, 24px 24px',
+    }}
+  >
+    <div className="flex items-center justify-between gap-2">
+      <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-accent">
+        <Layers className="w-3.5 h-3.5" />
+        <span>{scope === 'trip' ? 'Full Route' : scope === 'leg' ? 'Leg Focus' : 'Day Route'}</span>
+      </span>
+      <span className="text-[11px] font-mono text-muted">{scopedItems.length} stops</span>
+    </div>
+    <div className="my-3 space-y-2">
+      {scopedItems.length === 0 ? (
+        <p className="text-xs text-muted">
+          Schedule itinerary activities with place labels to plot pins for this scope.
+        </p>
+      ) : (
+        scopedItems.slice(0, 5).map((item, idx) => <MapStopRow key={item.id} item={item} index={idx} />)
+      )}
+    </div>
+    <p className="text-[11px] text-muted border-t border-border/60 pt-2">
+      Interactive vector tiles, offline Leg .pmtiles bundles, and transit route lines land in Ticket 05.
+    </p>
+  </div>
+)
+
+export const MapPreviewPanel: React.FC<MapPreviewPanelProps> = (props) => {
   const scopedItems = useMemo(
-    () => filterItemsForScope(scope, items, legs, days, selectedLegId, selectedDayId),
-    [scope, items, legs, days, selectedLegId, selectedDayId],
+    () =>
+      filterItemsForScope(
+        props.scope,
+        props.items,
+        props.legs,
+        props.days,
+        props.selectedLegId,
+        props.selectedDayId,
+      ),
+    [props.scope, props.items, props.legs, props.days, props.selectedLegId, props.selectedDayId],
   )
 
   return (
@@ -77,10 +134,9 @@ export const MapPreviewPanel: React.FC<MapPreviewPanelProps> = ({
         variant="brand"
         actions={<StatusBadge label="Preview" variant="info" size="xs" />}
       />
-
       <SegmentedControl<MapScope>
-        value={scope}
-        onChange={onChangeScope}
+        value={props.scope}
+        onChange={props.onChangeScope}
         variant="brand"
         fullWidth
         idPrefix="map-scope"
@@ -90,89 +146,25 @@ export const MapPreviewPanel: React.FC<MapPreviewPanelProps> = ({
           { id: 'day', label: 'Day' },
         ]}
       />
-
-      {scope === 'leg' && legs.length > 0 && (
+      {props.scope === 'leg' && props.legs.length > 0 && (
         <SelectInput
           aria-label="Scope map to leg"
           variant="brand"
-          value={selectedLegId}
-          onChange={(e) => onChangeLegId(e.target.value)}
-          options={legs.map((leg) => ({
-            value: leg.id,
-            label: `${leg.name} (${leg.primary_city})`,
-          }))}
+          value={props.selectedLegId}
+          onChange={(e) => props.onChangeLegId(e.target.value)}
+          options={props.legs.map((leg) => ({ value: leg.id, label: `${leg.name} (${leg.primary_city})` }))}
         />
       )}
-
-      {scope === 'day' && days.length > 0 && (
+      {props.scope === 'day' && props.days.length > 0 && (
         <SelectInput
           aria-label="Scope map to day"
           variant="brand"
-          value={selectedDayId}
-          onChange={(e) => onChangeDayId(e.target.value)}
-          options={days.map((day) => ({
-            value: day.id,
-            label: formatCalendarDayLabel(day.date),
-          }))}
+          value={props.selectedDayId}
+          onChange={(e) => props.onChangeDayId(e.target.value)}
+          options={props.days.map((day) => ({ value: day.id, label: formatCalendarDayLabel(day.date) }))}
         />
       )}
-
-      <div
-        className="relative overflow-hidden rounded-ui-control border border-border/80 bg-[#0b1623] p-4 min-h-[240px] flex flex-col justify-between"
-        style={{
-          backgroundImage:
-            'radial-gradient(circle at 75% 20%, rgba(56, 189, 248, 0.18), transparent 52%), linear-gradient(rgba(56, 189, 248, 0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(56, 189, 248, 0.06) 1px, transparent 1px)',
-          backgroundSize: '100% 100%, 24px 24px, 24px 24px',
-        }}
-      >
-        <div className="flex items-center justify-between gap-2">
-          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-accent">
-            <Layers className="w-3.5 h-3.5" />
-            <span>{scope === 'trip' ? 'Full Route' : scope === 'leg' ? 'Leg Focus' : 'Day Route'}</span>
-          </span>
-          <span className="text-[11px] font-mono text-muted">{scopedItems.length} stops</span>
-        </div>
-
-        <div className="my-3 space-y-2">
-          {scopedItems.length === 0 ? (
-            <p className="text-xs text-muted">
-              Schedule itinerary activities with place labels to plot pins for this scope.
-            </p>
-          ) : (
-            scopedItems.slice(0, 5).map((item, idx) => {
-              const localLabel = formatEventLocalTimeLabel(item)
-              return (
-                <div
-                  key={item.id}
-                  className="flex items-center justify-between gap-2 rounded-lg bg-card/85 border border-border/70 px-2.5 py-2 text-xs"
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="w-5 h-5 rounded-full bg-accent/20 text-accent font-mono text-[11px] font-bold flex items-center justify-center shrink-0">
-                      {idx + 1}
-                    </span>
-                    <div className="min-w-0">
-                      <p className="font-semibold text-foreground truncate">{item.title}</p>
-                      {Boolean(item.place_label) && (
-                        <p className="text-[11px] text-muted truncate flex items-center gap-1">
-                          <MapPin className="w-3 h-3 text-accent shrink-0" />
-                          <span>{item.place_label}</span>
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  {Boolean(localLabel) && (
-                    <span className="text-[10px] font-mono text-muted shrink-0">{localLabel}</span>
-                  )}
-                </div>
-              )
-            })
-          )}
-        </div>
-
-        <p className="text-[11px] text-muted border-t border-border/60 pt-2">
-          Interactive vector tiles, offline Leg .pmtiles bundles, and transit route lines land in Ticket 05.
-        </p>
-      </div>
+      <MapCanvasPreview scope={props.scope} scopedItems={scopedItems} />
     </GlassCard>
   )
 }

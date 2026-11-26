@@ -19,17 +19,10 @@ import {
 } from '@yggdrasil-lab/ui'
 
 import { OdysseusHttpAdapter, type OdysseusApiAdapter } from './api/client'
-import { ChecklistsAndNotesSection } from './components/ChecklistsAndNotesSection'
-import { LeftJumpRail } from './components/LeftJumpRail'
-import { MapPreviewPanel } from './components/MapPreviewPanel'
-import {
-  BookingsPlaceholderCard,
-  BudgetPlaceholderCard,
-} from './components/PlaceholderSectionCards'
-import { TripDocumentTimeline } from './components/TripDocumentTimeline'
+import { WorkspaceViews } from './WorkspaceViews'
 import { WorkspaceModals } from './components/WorkspaceModals'
 import { useOdysseusWorkspace, type WorkspaceErrorState } from './hooks/useOdysseusWorkspace'
-import type { ItineraryItem, MapScope, MobileTab, TripWorkspace } from './types'
+import type { MapScope, MobileTab } from './types'
 
 export interface AppProps {
   adapter?: OdysseusApiAdapter
@@ -63,105 +56,6 @@ const WorkspaceErrorDisplay: React.FC<{
     >
       {error.message}
     </AlertBanner>
-  )
-}
-
-interface WorkspaceViewsProps {
-  workspace: TripWorkspace
-  state: ReturnType<typeof useOdysseusWorkspace>
-  mobileTab: MobileTab
-  mapScope: MapScope
-  onChangeMapScope: (scope: MapScope) => void
-  mapLegId: string
-  onChangeMapLegId: (legId: string) => void
-  mapDayId: string
-  onChangeMapDayId: (dayId: string) => void
-  onOpenNewTrip: () => void
-  onOpenNewLeg: () => void
-  onOpenNewItem: (dayId: string | null) => void
-  onOpenNewChecklist: () => void
-  onOpenNewNote: () => void
-}
-
-const WorkspaceViews: React.FC<WorkspaceViewsProps> = (props) => {
-  const { workspace, state, mobileTab } = props
-  const handleToggleDone = async (item: ItineraryItem) => {
-    await state.updateItem(item.id, { status: item.status === 'done' ? 'planned' : 'done' })
-  }
-  const timelineNode = (
-    <TripDocumentTimeline
-      trips={state.trips}
-      trip={workspace.trip}
-      legs={workspace.legs}
-      days={workspace.days}
-      items={workspace.itinerary_items}
-      onSelectTrip={(id) => void state.selectTrip(id)}
-      onOpenNewTrip={props.onOpenNewTrip}
-      onOpenNewLeg={props.onOpenNewLeg}
-      onOpenNewItem={props.onOpenNewItem}
-      onToggleItemDone={handleToggleDone}
-      onMoveItemDay={(itemId, dayId) => state.updateItem(itemId, { day_id: dayId })}
-      onDeleteItem={state.deleteItem}
-    />
-  )
-  const listsNode = (
-    <ChecklistsAndNotesSection
-      checklists={workspace.checklists}
-      notes={workspace.travel_notes}
-      legs={workspace.legs}
-      onOpenNewChecklist={props.onOpenNewChecklist}
-      onAddChecklistItem={(checklistId, label) => state.addChecklistItem(checklistId, { label })}
-      onToggleChecklistItem={state.toggleChecklistItem}
-      onDeleteChecklistItem={state.deleteChecklistItem}
-      onOpenNewNote={props.onOpenNewNote}
-      onDeleteNote={state.deleteNote}
-    />
-  )
-  const mapNode = (
-    <MapPreviewPanel
-      legs={workspace.legs}
-      days={workspace.days}
-      items={workspace.itinerary_items}
-      scope={props.mapScope}
-      onChangeScope={props.onChangeMapScope}
-      selectedLegId={props.mapLegId}
-      onChangeLegId={props.onChangeMapLegId}
-      selectedDayId={props.mapDayId}
-      onChangeDayId={props.onChangeMapDayId}
-    />
-  )
-  return (
-    <>
-      <div
-        data-testid="desktop-workspace"
-        className="hidden lg:grid lg:grid-cols-[210px_minmax(0,1fr)_42%] lg:gap-5 lg:items-start"
-      >
-        <LeftJumpRail
-          legs={workspace.legs}
-          backlogCount={workspace.itinerary_items.filter((i) => i.day_id === null).length}
-          checklistCount={workspace.checklists.length}
-          noteCount={workspace.travel_notes.length}
-          onJumpToLeg={(legId) => {
-            props.onChangeMapLegId(legId)
-            props.onChangeMapScope('leg')
-          }}
-        />
-        <div className="space-y-4 min-w-0">
-          {timelineNode}
-          <BookingsPlaceholderCard />
-          {listsNode}
-          <BudgetPlaceholderCard budgetNzd={workspace.trip.budget_nzd} />
-        </div>
-        {mapNode}
-      </div>
-      <div data-testid="mobile-workspace" className="lg:hidden space-y-4">
-        {mobileTab === 'itinerary' && timelineNode}
-        {mobileTab === 'map' && mapNode}
-        {mobileTab === 'bookings' && <BookingsPlaceholderCard />}
-        {mobileTab === 'lists' && listsNode}
-        {mobileTab === 'budget' && <BudgetPlaceholderCard budgetNzd={workspace.trip.budget_nzd} />}
-      </div>
-    </>
   )
 }
 

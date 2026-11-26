@@ -23,21 +23,54 @@ interface ChecklistsAndNotesSectionProps {
   onDeleteNote: (noteId: string) => Promise<void>
 }
 
-interface ChecklistCardProps {
+const ChecklistItemRow: React.FC<{
+  checklistId: string
+  item: ChecklistItem
+  linkedLeg?: Leg
+  onToggleItem: (checklistId: string, item: ChecklistItem) => Promise<void>
+  onDeleteItem: (checklistId: string, itemId: string) => Promise<void>
+}> = ({ checklistId, item, linkedLeg, onToggleItem, onDeleteItem }) => (
+  <div className="flex items-center justify-between gap-2 rounded-lg bg-card/70 border border-border/60 px-2.5 py-1.5">
+    <button
+      type="button"
+      onClick={() => void onToggleItem(checklistId, item)}
+      className="flex items-center gap-2.5 text-left flex-1 min-h-[44px] min-w-0"
+      aria-label={`Toggle ${item.label}`}
+    >
+      <span
+        className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition-colors ${
+          item.is_completed ? 'bg-accent border-accent text-accent-fg' : 'border-border bg-background'
+        }`}
+      >
+        {item.is_completed && <Check className="w-3.5 h-3.5" />}
+      </span>
+      <span className={`text-xs truncate ${item.is_completed ? 'line-through text-muted' : 'text-foreground'}`}>
+        {item.label}
+      </span>
+      {linkedLeg && (
+        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-background border border-border text-muted shrink-0">
+          {linkedLeg.name}
+        </span>
+      )}
+    </button>
+    <Button
+      variant="ghost"
+      size="xs"
+      aria-label={`Remove ${item.label}`}
+      className="min-h-[44px]"
+      icon={<Trash2 className="w-3.5 h-3.5 text-rose-400" />}
+      onClick={() => void onDeleteItem(checklistId, item.id)}
+    />
+  </div>
+)
+
+const ChecklistCard: React.FC<{
   checklist: Checklist
   legsById: Map<string, Leg>
   onAddItem: (checklistId: string, label: string) => Promise<void>
   onToggleItem: (checklistId: string, item: ChecklistItem) => Promise<void>
   onDeleteItem: (checklistId: string, itemId: string) => Promise<void>
-}
-
-const ChecklistCard: React.FC<ChecklistCardProps> = ({
-  checklist,
-  legsById,
-  onAddItem,
-  onToggleItem,
-  onDeleteItem,
-}) => {
+}> = ({ checklist, legsById, onAddItem, onToggleItem, onDeleteItem }) => {
   const [draftLabel, setDraftLabel] = useState('')
   const completedCount = checklist.items.filter((item) => item.is_completed).length
 
@@ -63,56 +96,18 @@ const ChecklistCard: React.FC<ChecklistCardProps> = ({
           {completedCount}/{checklist.items.length}
         </span>
       </div>
-
       <div className="space-y-1.5">
-        {checklist.items.map((item) => {
-          const linkedLeg = item.leg_id ? legsById.get(item.leg_id) : undefined
-          return (
-            <div
-              key={item.id}
-              className="flex items-center justify-between gap-2 rounded-lg bg-card/70 border border-border/60 px-2.5 py-1.5"
-            >
-              <button
-                type="button"
-                onClick={() => void onToggleItem(checklist.id, item)}
-                className="flex items-center gap-2.5 text-left flex-1 min-h-[44px] min-w-0"
-                aria-label={`Toggle ${item.label}`}
-              >
-                <span
-                  className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition-colors ${
-                    item.is_completed
-                      ? 'bg-accent border-accent text-accent-fg'
-                      : 'border-border bg-background'
-                  }`}
-                >
-                  {item.is_completed && <Check className="w-3.5 h-3.5" />}
-                </span>
-                <span
-                  className={`text-xs truncate ${
-                    item.is_completed ? 'line-through text-muted' : 'text-foreground'
-                  }`}
-                >
-                  {item.label}
-                </span>
-                {linkedLeg && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-background border border-border text-muted shrink-0">
-                    {linkedLeg.name}
-                  </span>
-                )}
-              </button>
-              <Button
-                variant="ghost"
-                size="xs"
-                aria-label={`Remove ${item.label}`}
-                className="min-h-[44px]"
-                icon={<Trash2 className="w-3.5 h-3.5 text-rose-400" />}
-                onClick={() => void onDeleteItem(checklist.id, item.id)}
-              />
-            </div>
-          )
-        })}
+        {checklist.items.map((item) => (
+          <ChecklistItemRow
+            key={item.id}
+            checklistId={checklist.id}
+            item={item}
+            linkedLeg={item.leg_id ? legsById.get(item.leg_id) : undefined}
+            onToggleItem={onToggleItem}
+            onDeleteItem={onDeleteItem}
+          />
+        ))}
       </div>
-
       <form onSubmit={(e) => void handleSubmit(e)} className="flex items-center gap-2">
         <TextInput
           variant="brand"
@@ -129,6 +124,40 @@ const ChecklistCard: React.FC<ChecklistCardProps> = ({
   )
 }
 
+const TravelNoteArticle: React.FC<{
+  note: TravelNote
+  linkedLeg?: Leg
+  onDeleteNote: (noteId: string) => Promise<void>
+}> = ({ note, linkedLeg, onDeleteNote }) => (
+  <article
+    data-testid={`travel-note-${note.id}`}
+    className="rounded-ui-control bg-background/60 border border-border/80 p-3.5 space-y-2"
+  >
+    <div className="flex items-start justify-between gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <h4 className="text-sm font-bold text-foreground">{note.title}</h4>
+        {note.is_private && (
+          <StatusBadge label="Private" variant="warning" size="xs" icon={<Lock className="w-3 h-3" />} />
+        )}
+        {linkedLeg && (
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-card border border-border text-muted">
+            {linkedLeg.name}
+          </span>
+        )}
+      </div>
+      <Button
+        variant="ghost"
+        size="xs"
+        aria-label={`Delete note ${note.title}`}
+        className="min-h-[44px] sm:min-h-[34px]"
+        icon={<Trash2 className="w-3.5 h-3.5 text-rose-400" />}
+        onClick={() => void onDeleteNote(note.id)}
+      />
+    </div>
+    <p className="text-xs text-slate-300 whitespace-pre-wrap leading-relaxed">{note.body}</p>
+  </article>
+)
+
 export const ChecklistsAndNotesSection: React.FC<ChecklistsAndNotesSectionProps> = ({
   checklists,
   notes,
@@ -141,7 +170,6 @@ export const ChecklistsAndNotesSection: React.FC<ChecklistsAndNotesSectionProps>
   onDeleteNote,
 }) => {
   const legsById = new Map(legs.map((leg) => [leg.id, leg]))
-
   return (
     <div className="space-y-4">
       <GlassCard id="section-checklists" tone="glass" padding="md" className="space-y-4">
@@ -151,23 +179,13 @@ export const ChecklistsAndNotesSection: React.FC<ChecklistsAndNotesSectionProps>
           icon={<CheckSquare className="w-4 h-4" />}
           variant="emerald"
           actions={
-            <Button
-              variant="brand"
-              size="sm"
-              className="min-h-[44px]"
-              icon={<Plus className="w-3.5 h-3.5" />}
-              onClick={onOpenNewChecklist}
-            >
+            <Button variant="brand" size="sm" className="min-h-[44px]" icon={<Plus className="w-3.5 h-3.5" />} onClick={onOpenNewChecklist}>
               New Checklist
             </Button>
           }
         />
-
         {checklists.length === 0 ? (
-          <EmptyState
-            title="No checklists yet"
-            description="Create packing, prep, or shopping lists tied to your trip."
-          />
+          <EmptyState title="No checklists yet" description="Create packing, prep, or shopping lists tied to your trip." />
         ) : (
           <div className="space-y-3">
             {checklists.map((checklist) => (
@@ -191,65 +209,23 @@ export const ChecklistsAndNotesSection: React.FC<ChecklistsAndNotesSectionProps>
           icon={<FileText className="w-4 h-4" />}
           variant="purple"
           actions={
-            <Button
-              variant="outline"
-              size="sm"
-              className="min-h-[44px]"
-              icon={<Plus className="w-3.5 h-3.5" />}
-              onClick={onOpenNewNote}
-            >
+            <Button variant="outline" size="sm" className="min-h-[44px]" icon={<Plus className="w-3.5 h-3.5" />} onClick={onOpenNewNote}>
               Add Note
             </Button>
           }
         />
-
         {notes.length === 0 ? (
-          <EmptyState
-            title="No travel notes yet"
-            description="Capture visa reminders, locker codes, or arrival instructions."
-          />
+          <EmptyState title="No travel notes yet" description="Capture visa reminders, locker codes, or arrival instructions." />
         ) : (
           <div className="space-y-2.5">
-            {notes.map((note) => {
-              const linkedLeg = note.leg_id ? legsById.get(note.leg_id) : undefined
-              return (
-                <article
-                  key={note.id}
-                  data-testid={`travel-note-${note.id}`}
-                  className="rounded-ui-control bg-background/60 border border-border/80 p-3.5 space-y-2"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h4 className="text-sm font-bold text-foreground">{note.title}</h4>
-                      {note.is_private && (
-                        <StatusBadge
-                          label="Private"
-                          variant="warning"
-                          size="xs"
-                          icon={<Lock className="w-3 h-3" />}
-                        />
-                      )}
-                      {linkedLeg && (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-card border border-border text-muted">
-                          {linkedLeg.name}
-                        </span>
-                      )}
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="xs"
-                      aria-label={`Delete note ${note.title}`}
-                      className="min-h-[44px] sm:min-h-[34px]"
-                      icon={<Trash2 className="w-3.5 h-3.5 text-rose-400" />}
-                      onClick={() => void onDeleteNote(note.id)}
-                    />
-                  </div>
-                  <p className="text-xs text-slate-300 whitespace-pre-wrap leading-relaxed">
-                    {note.body}
-                  </p>
-                </article>
-              )
-            })}
+            {notes.map((note) => (
+              <TravelNoteArticle
+                key={note.id}
+                note={note}
+                linkedLeg={note.leg_id ? legsById.get(note.leg_id) : undefined}
+                onDeleteNote={onDeleteNote}
+              />
+            ))}
           </div>
         )}
       </GlassCard>

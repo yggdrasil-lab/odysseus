@@ -20,14 +20,13 @@ function classifyError(err: unknown): WorkspaceErrorState {
   return { kind: 'api', message }
 }
 
-export function useOdysseusWorkspace(adapter: OdysseusApiAdapter) {
+function useWorkspaceQueries(adapter: OdysseusApiAdapter) {
   const [trips, setTrips] = useState<Trip[]>([])
   const [selectedTripId, setSelectedTripId] = useState<string | null>(null)
   const [workspace, setWorkspace] = useState<TripWorkspace | null>(null)
   const [isLoading, setIsLoading] = useState<boolean>(true)
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false)
   const [loadError, setLoadError] = useState<WorkspaceErrorState | null>(null)
-  const [actionError, setActionError] = useState<WorkspaceErrorState | null>(null)
 
   const hydrateTrips = useCallback(
     async (signal?: AbortSignal) => {
@@ -55,12 +54,6 @@ export function useOdysseusWorkspace(adapter: OdysseusApiAdapter) {
     [adapter],
   )
 
-  useEffect(() => {
-    const controller = new AbortController()
-    void hydrateTrips(controller.signal)
-    return () => controller.abort()
-  }, [hydrateTrips])
-
   const reloadWorkspace = useCallback(
     async (tripId: string) => {
       setIsRefreshing(true)
@@ -81,19 +74,35 @@ export function useOdysseusWorkspace(adapter: OdysseusApiAdapter) {
     [adapter],
   )
 
+  return {
+    trips, selectedTripId, setSelectedTripId, workspace,
+    isLoading, isRefreshing, loadError, hydrateTrips, reloadWorkspace,
+  }
+}
+
+export function useOdysseusWorkspace(adapter: OdysseusApiAdapter) {
+  const queries = useWorkspaceQueries(adapter)
+  const [actionError, setActionError] = useState<WorkspaceErrorState | null>(null)
+
+  useEffect(() => {
+    const controller = new AbortController()
+    void queries.hydrateTrips(controller.signal)
+    return () => controller.abort()
+  }, [queries.hydrateTrips])
+
   const runMutation = useCallback(
     async (fn: (tripId: string) => Promise<void>) => {
-      if (!selectedTripId) return
+      if (!queries.selectedTripId) return
       setActionError(null)
       try {
-        await fn(selectedTripId)
-        await reloadWorkspace(selectedTripId)
+        await fn(queries.selectedTripId)
+        await queries.reloadWorkspace(queries.selectedTripId)
       } catch (err: unknown) {
         setActionError(classifyError(err))
         throw err
       }
     },
-    [reloadWorkspace, selectedTripId],
+    [queries.reloadWorkspace, queries.selectedTripId],
   )
 
   const actions = useMemo(
@@ -103,38 +112,38 @@ export function useOdysseusWorkspace(adapter: OdysseusApiAdapter) {
         runMutation,
         onTripCreated: async (tripId) => {
           setActionError(null)
-          setSelectedTripId(tripId)
-          await reloadWorkspace(tripId)
+          queries.setSelectedTripId(tripId)
+          await queries.reloadWorkspace(tripId)
         },
         onActionError: (err) => setActionError(classifyError(err)),
       }),
-    [adapter, reloadWorkspace, runMutation],
+    [adapter, queries.reloadWorkspace, queries.setSelectedTripId, runMutation],
   )
 
   const selectTrip = useCallback(
     async (tripId: string) => {
-      setSelectedTripId(tripId)
+      queries.setSelectedTripId(tripId)
       setActionError(null)
-      await reloadWorkspace(tripId)
+      await queries.reloadWorkspace(tripId)
     },
-    [reloadWorkspace],
+    [queries.reloadWorkspace, queries.setSelectedTripId],
   )
 
   const refresh = useCallback(async () => {
-    if (!selectedTripId) {
-      await hydrateTrips()
+    if (!queries.selectedTripId) {
+      await queries.hydrateTrips()
       return
     }
-    await reloadWorkspace(selectedTripId)
-  }, [hydrateTrips, reloadWorkspace, selectedTripId])
+    await queries.reloadWorkspace(queries.selectedTripId)
+  }, [queries.hydrateTrips, queries.reloadWorkspace, queries.selectedTripId])
 
   return {
-    trips,
-    selectedTripId,
-    workspace,
-    isLoading,
-    isRefreshing,
-    loadError,
+    trips: queries.trips,
+    selectedTripId: queries.selectedTripId,
+    workspace: queries.workspace,
+    isLoading: queries.isLoading,
+    isRefreshing: queries.isRefreshing,
+    loadError: queries.loadError,
     actionError,
     clearActionError: () => setActionError(null),
     selectTrip,

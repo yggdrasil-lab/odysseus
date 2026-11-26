@@ -161,7 +161,7 @@ def _create_days_and_itinerary() -> None:
     op.create_index("ix_itinerary_items_day_id", "itinerary_items", ["day_id"])
 
 
-def _create_checklists_and_notes() -> None:
+def _create_checklists() -> None:
     op.create_table(
         "checklists",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, nullable=False),
@@ -169,18 +169,8 @@ def _create_checklists_and_notes() -> None:
         sa.Column("title", sa.String(length=200), nullable=False),
         sa.Column("list_type", sa.String(length=32), nullable=False, server_default="packing"),
         sa.Column("sort_order", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column(
-            "created_at",
-            sa.DateTime(timezone=True),
-            nullable=False,
-            server_default=sa.text("now()"),
-        ),
-        sa.Column(
-            "updated_at",
-            sa.DateTime(timezone=True),
-            nullable=False,
-            server_default=sa.text("now()"),
-        ),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
         sa.ForeignKeyConstraint(["trip_id"], ["trips.id"], ondelete="CASCADE"),
     )
     op.create_index("ix_checklists_trip_id", "checklists", ["trip_id"])
@@ -191,32 +181,19 @@ def _create_checklists_and_notes() -> None:
         sa.Column("checklist_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("leg_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("label", sa.String(length=250), nullable=False),
-        sa.Column(
-            "is_completed",
-            sa.Boolean(),
-            nullable=False,
-            server_default=sa.text("false"),
-        ),
+        sa.Column("is_completed", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column("due_date", sa.Date(), nullable=True),
         sa.Column("note", sa.Text(), nullable=True),
         sa.Column("sort_order", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column(
-            "created_at",
-            sa.DateTime(timezone=True),
-            nullable=False,
-            server_default=sa.text("now()"),
-        ),
-        sa.Column(
-            "updated_at",
-            sa.DateTime(timezone=True),
-            nullable=False,
-            server_default=sa.text("now()"),
-        ),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
         sa.ForeignKeyConstraint(["checklist_id"], ["checklists.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["leg_id"], ["legs.id"], ondelete="SET NULL"),
     )
     op.create_index("ix_checklist_items_checklist_id", "checklist_items", ["checklist_id"])
 
+
+def _create_travel_notes() -> None:
     op.create_table(
         "travel_notes",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, nullable=False),
@@ -225,25 +202,10 @@ def _create_checklists_and_notes() -> None:
         sa.Column("day_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("title", sa.String(length=200), nullable=False),
         sa.Column("body", sa.Text(), nullable=False),
-        sa.Column(
-            "is_private",
-            sa.Boolean(),
-            nullable=False,
-            server_default=sa.text("false"),
-        ),
+        sa.Column("is_private", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column("sort_order", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column(
-            "created_at",
-            sa.DateTime(timezone=True),
-            nullable=False,
-            server_default=sa.text("now()"),
-        ),
-        sa.Column(
-            "updated_at",
-            sa.DateTime(timezone=True),
-            nullable=False,
-            server_default=sa.text("now()"),
-        ),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
         sa.ForeignKeyConstraint(["trip_id"], ["trips.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["leg_id"], ["legs.id"], ondelete="SET NULL"),
         sa.ForeignKeyConstraint(["day_id"], ["days.id"], ondelete="SET NULL"),
@@ -255,7 +217,8 @@ def upgrade() -> None:
     """Create core Odysseus travel planning tables."""
     _create_trips_and_legs()
     _create_days_and_itinerary()
-    _create_checklists_and_notes()
+    _create_checklists()
+    _create_travel_notes()
 
 
 def downgrade() -> None:
