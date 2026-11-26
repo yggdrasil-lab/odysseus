@@ -13,6 +13,7 @@ from app.models import (
     Day,
     ItineraryItem,
     Leg,
+    MapPack,
     Place,
     RouteEstimate,
     TravelNote,
@@ -142,6 +143,14 @@ def require_route_for_trip(
             f"Route estimate {route_id} does not belong to trip {trip_id}."
         )
     return route
+
+
+def require_mappack_for_trip(db: Session, trip_id: uuid.UUID, pack_id: uuid.UUID) -> MapPack:
+    """Return MapPack belonging to trip_id or raise 404."""
+    pack = db.get(MapPack, pack_id)
+    if pack is None or pack.trip_id != trip_id:
+        raise DomainNotFoundError(f"Map pack {pack_id} not found.")
+    return pack
 
 
 def reject_explicit_nulls(payload: object, required_fields: tuple[str, ...]) -> None:

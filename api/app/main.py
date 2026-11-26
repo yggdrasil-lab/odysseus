@@ -19,6 +19,7 @@ from app.routers import (
     checklists,
     health,
     itinerary,
+    mappacks,
     notes,
     places,
     routes,
@@ -88,6 +89,7 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
     """Build and configure the Odysseus FastAPI application."""
     resolved_settings = app_settings or settings
     application = FastAPI(title="Odysseus API", version="0.1.0")
+    application.state.settings = resolved_settings
     _register_domain_handlers(application)
     application.include_router(health.router)
     application.include_router(trips.router)
@@ -98,6 +100,7 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
     application.include_router(attachments.router)
     application.include_router(places.router)
     application.include_router(routes.router)
+    application.include_router(mappacks.router)
     application.include_router(mcp_router)
     application.add_middleware(
         McpAuthMiddleware,

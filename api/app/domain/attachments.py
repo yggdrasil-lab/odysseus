@@ -157,3 +157,18 @@ def parse_byte_range(range_header: str, total_size: int) -> tuple[int, int]:
     if end < start:
         raise DomainRangeNotSatisfiableError("Range end precedes range start.", total_size)
     return start, end
+
+
+def etag_matches(if_none_match: str | None, sha256_hex: str) -> bool:
+    """Check whether an If-None-Match header matches the resource sha256 ETag."""
+    if not if_none_match:
+        return False
+    for raw_tag in if_none_match.split(","):
+        cleaned = raw_tag.strip()
+        if cleaned == "*":
+            return True
+        if cleaned.startswith("W/"):
+            cleaned = cleaned[2:].strip()
+        if cleaned.strip('"') == sha256_hex:
+            return True
+    return False

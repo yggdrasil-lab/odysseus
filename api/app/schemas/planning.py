@@ -7,6 +7,7 @@ import uuid
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas.bookings import AttachmentRead, BookingRead
+from app.schemas.mappacks import MapPackRead
 from app.schemas.places import PlaceRead, RouteEstimateRead
 from app.schemas.trips import DayRead, LegRead, TripRead
 
@@ -217,3 +218,4 @@ class TripWorkspaceRead(BaseModel):
     attachments: list[AttachmentRead]
     places: list[PlaceRead]
     route_estimates: list[RouteEstimateRead]
+    map_packs: list[MapPackRead]
