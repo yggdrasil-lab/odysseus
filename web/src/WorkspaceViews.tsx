@@ -33,6 +33,7 @@ export interface WorkspaceViewsProps {
 
 function buildSectionNodes(props: WorkspaceViewsProps) {
   const { workspace, state } = props
+  const readOnly = state.isOffline
   const handleToggleDone = async (item: ItineraryItem) => {
     await state.updateItem(item.id, { status: item.status === 'done' ? 'planned' : 'done' })
   }
@@ -45,6 +46,7 @@ function buildSectionNodes(props: WorkspaceViewsProps) {
       items={workspace.itinerary_items}
       bookings={workspace.bookings}
       places={workspace.places}
+      readOnly={readOnly}
       onSelectTrip={(id) => void state.selectTrip(id)}
       onOpenNewTrip={props.onOpenNewTrip}
       onOpenNewLeg={props.onOpenNewLeg}
@@ -58,6 +60,7 @@ function buildSectionNodes(props: WorkspaceViewsProps) {
     <BookingsHubSection
       bookings={workspace.bookings}
       attachments={workspace.attachments}
+      readOnly={readOnly}
       onOpenNewBooking={props.onOpenNewBooking}
       onEditBooking={props.onEditBooking}
       onDeleteBooking={state.deleteBooking}
@@ -71,6 +74,7 @@ function buildSectionNodes(props: WorkspaceViewsProps) {
       checklists={workspace.checklists}
       notes={workspace.travel_notes}
       legs={workspace.legs}
+      readOnly={readOnly}
       onOpenNewChecklist={props.onOpenNewChecklist}
       onAddChecklistItem={(checklistId, label) => state.addChecklistItem(checklistId, { label })}
       onToggleChecklistItem={state.toggleChecklistItem}
@@ -92,6 +96,9 @@ function buildSectionNodes(props: WorkspaceViewsProps) {
       onChangeLegId={props.onChangeMapLegId}
       selectedDayId={props.mapDayId}
       onChangeDayId={props.onChangeMapDayId}
+      readOnly={readOnly}
+      isOffline={state.isOffline}
+      offlineMapPacks={state.offlineMapPacks}
       onOpenAddPlace={props.onOpenAddPlace}
       onEditPlace={props.onEditPlace}
       onDeletePlace={state.deletePlace}

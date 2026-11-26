@@ -20,6 +20,8 @@ export type TravelMode = 'walk' | 'drive' | 'transit' | 'flight' | 'ferry'
 
 export type RouteSource = 'geodesic' | 'osrm' | 'manual'
 
+export type MapPackStatus = 'ready' | 'failed'
+
 export interface Trip {
   id: string
   title: string
@@ -313,6 +315,85 @@ export interface RouteEstimateUpdatePayload {
   manual_override?: boolean
 }
 
+export interface MapPack {
+  id: string
+  trip_id: string
+  leg_id: string | null
+  label: string
+  status: MapPackStatus
+  bbox_west: number
+  bbox_south: number
+  bbox_east: number
+  bbox_north: number
+  max_zoom: number
+  filename: string
+  size_bytes: number
+  sha256: string
+  error_message: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface MapPackCreatePayload {
+  leg_id?: string | null
+  label?: string | null
+  bbox_west?: number | null
+  bbox_south?: number | null
+  bbox_east?: number | null
+  bbox_north?: number | null
+  max_zoom?: number
+  source_url?: string | null
+}
+
+export interface OfflineBundleAttachmentManifest {
+  id: string
+  booking_id: string | null
+  filename: string
+  mime_type: string
+  size_bytes: number
+  sha256: string
+  content_url: string
+}
+
+export interface OfflineBundleMapPackManifest {
+  id: string
+  leg_id: string | null
+  label: string
+  filename: string
+  size_bytes: number
+  sha256: string
+  max_zoom: number
+  bbox_west: number
+  bbox_south: number
+  bbox_east: number
+  bbox_north: number
+  file_url: string
+}
+
+export interface OfflineBundle {
+  bundle_version: number
+  generated_at: string
+  workspace_sha256: string
+  workspace: TripWorkspace
+  attachments: OfflineBundleAttachmentManifest[]
+  map_packs: OfflineBundleMapPackManifest[]
+}
+
+export interface OfflineSyncSummary {
+  tripId: string
+  syncedAt: string
+  attachmentCount: number
+  mapPackCount: number
+  totalBytes: number
+  includesMapPacks: boolean
+}
+
+export interface OfflineMapPackEntry {
+  packId: string
+  label: string
+  blob: Blob
+}
+
 export interface TripWorkspace {
   trip: Trip
   legs: Leg[]
@@ -324,6 +405,7 @@ export interface TripWorkspace {
   attachments: Attachment[]
   places: Place[]
   route_estimates: RouteEstimate[]
+  map_packs?: MapPack[]
 }
 
 export interface TripCreatePayload {

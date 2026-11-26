@@ -55,6 +55,7 @@ export interface TripDocumentTimelineProps {
   items: ItineraryItem[]
   bookings?: Booking[]
   places?: Place[]
+  readOnly?: boolean
   onSelectTrip: (tripId: string) => void
   onOpenNewTrip: () => void
   onOpenNewLeg: () => void
@@ -113,10 +114,11 @@ const SegmentTimelineRow: React.FC<{ entry: DaySegmentEntry }> = ({ entry }) => 
 const ScheduledItemRow: React.FC<{
   item: ItineraryItem
   linkedPlace?: Place
+  readOnly: boolean
   onToggleDone: (item: ItineraryItem) => Promise<void>
   onMoveToBacklog: (itemId: string) => Promise<void>
   onDelete: (itemId: string) => Promise<void>
-}> = ({ item, linkedPlace, onToggleDone, onMoveToBacklog, onDelete }) => {
+}> = ({ item, linkedPlace, readOnly, onToggleDone, onMoveToBacklog, onDelete }) => {
   const timeLabel = formatEventLocalTimeLabel(item)
   const isDone = item.status === 'done'
   const placeDisplay = linkedPlace?.name ?? item.place_label
@@ -161,6 +163,7 @@ const ScheduledItemRow: React.FC<{
         <Button
           variant={isDone ? 'secondary' : 'outline'}
           size="xs"
+          disabled={readOnly}
           className="min-h-[44px] sm:min-h-[34px]"
           icon={<CheckCircle2 className="w-3.5 h-3.5" />}
           onClick={() => void onToggleDone(item)}
@@ -170,6 +173,7 @@ const ScheduledItemRow: React.FC<{
         <Button
           variant="ghost"
           size="xs"
+          disabled={readOnly}
           className="min-h-[44px] sm:min-h-[34px]"
           onClick={() => void onMoveToBacklog(item.id)}
         >
@@ -178,6 +182,7 @@ const ScheduledItemRow: React.FC<{
         <Button
           variant="danger"
           size="xs"
+          disabled={readOnly}
           aria-label={`Delete ${item.title}`}
           className="min-h-[44px] sm:min-h-[34px]"
           icon={<Trash2 className="w-3.5 h-3.5" />}
@@ -188,8 +193,9 @@ const ScheduledItemRow: React.FC<{
   )
 }
 
-const LegChaptersList: React.FC<{ legs: Leg[]; onOpenNewLeg: () => void }> = ({
+const LegChaptersList: React.FC<{ legs: Leg[]; readOnly: boolean; onOpenNewLeg: () => void }> = ({
   legs,
+  readOnly,
   onOpenNewLeg,
 }) => (
   <div className="space-y-2 pt-1">
@@ -202,7 +208,7 @@ const LegChaptersList: React.FC<{ legs: Leg[]; onOpenNewLeg: () => void }> = ({
         title="No destination legs yet"
         description="Add destination legs to automatically provision flat Trip days and timezone chapters."
         action={
-          <Button variant="brand" size="sm" onClick={onOpenNewLeg}>
+          <Button variant="brand" size="sm" disabled={readOnly} onClick={onOpenNewLeg}>
             Add First Leg
           </Button>
         }
@@ -241,10 +247,11 @@ const TripOverviewCard: React.FC<{
   trips: Trip[]
   trip: Trip
   legs: Leg[]
+  readOnly: boolean
   onSelectTrip: (tripId: string) => void
   onOpenNewTrip: () => void
   onOpenNewLeg: () => void
-}> = ({ trips, trip, legs, onSelectTrip, onOpenNewTrip, onOpenNewLeg }) => {
+}> = ({ trips, trip, legs, readOnly, onSelectTrip, onOpenNewTrip, onOpenNewLeg }) => {
   const dateSummary =
     trip.start_date && trip.end_date
       ? `${trip.start_date} to ${trip.end_date}`
@@ -283,6 +290,7 @@ const TripOverviewCard: React.FC<{
           <Button
             variant="outline"
             size="sm"
+            disabled={readOnly}
             className="min-h-[44px]"
             icon={<Plus className="w-3.5 h-3.5" />}
             onClick={onOpenNewTrip}
@@ -292,6 +300,7 @@ const TripOverviewCard: React.FC<{
           <Button
             variant="brand"
             size="sm"
+            disabled={readOnly}
             className="min-h-[44px]"
             icon={<Plus className="w-3.5 h-3.5" />}
             onClick={onOpenNewLeg}
@@ -306,7 +315,7 @@ const TripOverviewCard: React.FC<{
           {trip.summary}
         </p>
       )}
-      <LegChaptersList legs={legs} onOpenNewLeg={onOpenNewLeg} />
+      <LegChaptersList legs={legs} readOnly={readOnly} onOpenNewLeg={onOpenNewLeg} />
     </GlassCard>
   )
 }
@@ -317,6 +326,7 @@ const DayCard: React.FC<{
   dayItems: ItineraryItem[]
   daySegments: DaySegmentEntry[]
   placesById: Map<string, Place>
+  readOnly: boolean
   onOpenNewItem: (dayId: string) => void
   onToggleItemDone: (item: ItineraryItem) => Promise<void>
   onMoveToBacklog: (itemId: string) => Promise<void>
@@ -327,6 +337,7 @@ const DayCard: React.FC<{
   dayItems,
   daySegments,
   placesById,
+  readOnly,
   onOpenNewItem,
   onToggleItemDone,
   onMoveToBacklog,
@@ -359,6 +370,7 @@ const DayCard: React.FC<{
       <Button
         variant="outline"
         size="xs"
+        disabled={readOnly}
         className="min-h-[44px] sm:min-h-[34px]"
         icon={<Plus className="w-3.5 h-3.5" />}
         onClick={() => onOpenNewItem(day.id)}
@@ -388,6 +400,7 @@ const DayCard: React.FC<{
               key={item.id}
               item={item}
               linkedPlace={item.place_id ? placesById.get(item.place_id) : undefined}
+              readOnly={readOnly}
               onToggleDone={onToggleItemDone}
               onMoveToBacklog={onMoveToBacklog}
               onDelete={onDeleteItem}
@@ -402,10 +415,11 @@ const DayCard: React.FC<{
 const BacklogSectionCard: React.FC<{
   backlogItems: ItineraryItem[]
   days: Day[]
+  readOnly: boolean
   onOpenNewItem: () => void
   onMoveItemDay: (itemId: string, dayId: string | null) => Promise<void>
   onDeleteItem: (itemId: string) => Promise<void>
-}> = ({ backlogItems, days, onOpenNewItem, onMoveItemDay, onDeleteItem }) => (
+}> = ({ backlogItems, days, readOnly, onOpenNewItem, onMoveItemDay, onDeleteItem }) => (
   <GlassCard id="section-backlog" tone="glass" padding="md" className="space-y-3">
     <SectionHeader
       title="Idea Backlog"
@@ -416,6 +430,7 @@ const BacklogSectionCard: React.FC<{
         <Button
           variant="outline"
           size="sm"
+          disabled={readOnly}
           className="min-h-[44px]"
           icon={<Plus className="w-3.5 h-3.5" />}
           onClick={onOpenNewItem}
@@ -455,6 +470,7 @@ const BacklogSectionCard: React.FC<{
                   <SelectInput
                     aria-label={`Schedule ${item.title} to day`}
                     variant="brand"
+                    disabled={readOnly}
                     value=""
                     containerClassName="w-40"
                     placeholder="Schedule day..."
@@ -467,6 +483,7 @@ const BacklogSectionCard: React.FC<{
                 <Button
                   variant="danger"
                   size="xs"
+                  disabled={readOnly}
                   aria-label={`Delete ${item.title}`}
                   className="min-h-[44px]"
                   icon={<Trash2 className="w-3.5 h-3.5" />}
@@ -501,6 +518,7 @@ function buildDaySegmentsMap(bookings: Booking[]): Map<string, DaySegmentEntry[]
 }
 
 export const TripDocumentTimeline: React.FC<TripDocumentTimelineProps> = (props) => {
+  const readOnly = Boolean(props.readOnly)
   const backlogItems = props.items.filter((item) => item.day_id === null)
   const placesById = new Map((props.places ?? []).map((p) => [p.id, p]))
   const segmentsByDate = buildDaySegmentsMap(props.bookings ?? [])
@@ -510,6 +528,7 @@ export const TripDocumentTimeline: React.FC<TripDocumentTimelineProps> = (props)
         trips={props.trips}
         trip={props.trip}
         legs={props.legs}
+        readOnly={readOnly}
         onSelectTrip={props.onSelectTrip}
         onOpenNewTrip={props.onOpenNewTrip}
         onOpenNewLeg={props.onOpenNewLeg}
@@ -524,6 +543,7 @@ export const TripDocumentTimeline: React.FC<TripDocumentTimelineProps> = (props)
             <Button
               variant="brand"
               size="sm"
+              disabled={readOnly}
               className="min-h-[44px]"
               icon={<Plus className="w-3.5 h-3.5" />}
               onClick={() => props.onOpenNewItem(props.days[0]?.id ?? null)}
@@ -547,6 +567,7 @@ export const TripDocumentTimeline: React.FC<TripDocumentTimelineProps> = (props)
                 dayItems={props.items.filter((item) => item.day_id === day.id)}
                 daySegments={segmentsByDate.get(day.date) ?? []}
                 placesById={placesById}
+                readOnly={readOnly}
                 onOpenNewItem={(dayId) => props.onOpenNewItem(dayId)}
                 onToggleItemDone={props.onToggleItemDone}
                 onMoveToBacklog={(itemId) => props.onMoveItemDay(itemId, null)}
@@ -559,6 +580,7 @@ export const TripDocumentTimeline: React.FC<TripDocumentTimelineProps> = (props)
       <BacklogSectionCard
         backlogItems={backlogItems}
         days={props.days}
+        readOnly={readOnly}
         onOpenNewItem={() => props.onOpenNewItem(null)}
         onMoveItemDay={props.onMoveItemDay}
         onDeleteItem={props.onDeleteItem}

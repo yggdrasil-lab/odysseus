@@ -11,6 +11,14 @@ if (!rootElement) {
   throw new Error('#root element is missing from index.html')
 }
 
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    void navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch((err: unknown) => {
+      console.error('Odysseus Service Worker registration failed:', err)
+    })
+  })
+}
+
 createRoot(rootElement).render(
   <StrictMode>
     <App />

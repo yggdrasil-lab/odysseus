@@ -15,6 +15,7 @@ interface ChecklistsAndNotesSectionProps {
   checklists: Checklist[]
   notes: TravelNote[]
   legs: Leg[]
+  readOnly?: boolean
   onOpenNewChecklist: () => void
   onAddChecklistItem: (checklistId: string, label: string) => Promise<void>
   onToggleChecklistItem: (checklistId: string, item: ChecklistItem) => Promise<void>
@@ -27,14 +28,16 @@ const ChecklistItemRow: React.FC<{
   checklistId: string
   item: ChecklistItem
   linkedLeg?: Leg
+  readOnly: boolean
   onToggleItem: (checklistId: string, item: ChecklistItem) => Promise<void>
   onDeleteItem: (checklistId: string, itemId: string) => Promise<void>
-}> = ({ checklistId, item, linkedLeg, onToggleItem, onDeleteItem }) => (
+}> = ({ checklistId, item, linkedLeg, readOnly, onToggleItem, onDeleteItem }) => (
   <div className="flex items-center justify-between gap-2 rounded-lg bg-card/70 border border-border/60 px-2.5 py-1.5">
     <button
       type="button"
+      disabled={readOnly}
       onClick={() => void onToggleItem(checklistId, item)}
-      className="flex items-center gap-2.5 text-left flex-1 min-h-[44px] min-w-0"
+      className="flex items-center gap-2.5 text-left flex-1 min-h-[44px] min-w-0 disabled:opacity-60"
       aria-label={`Toggle ${item.label}`}
     >
       <span
@@ -56,6 +59,7 @@ const ChecklistItemRow: React.FC<{
     <Button
       variant="ghost"
       size="xs"
+      disabled={readOnly}
       aria-label={`Remove ${item.label}`}
       className="min-h-[44px]"
       icon={<Trash2 className="w-3.5 h-3.5 text-rose-400" />}
@@ -67,15 +71,17 @@ const ChecklistItemRow: React.FC<{
 const ChecklistCard: React.FC<{
   checklist: Checklist
   legsById: Map<string, Leg>
+  readOnly: boolean
   onAddItem: (checklistId: string, label: string) => Promise<void>
   onToggleItem: (checklistId: string, item: ChecklistItem) => Promise<void>
   onDeleteItem: (checklistId: string, itemId: string) => Promise<void>
-}> = ({ checklist, legsById, onAddItem, onToggleItem, onDeleteItem }) => {
+}> = ({ checklist, legsById, readOnly, onAddItem, onToggleItem, onDeleteItem }) => {
   const [draftLabel, setDraftLabel] = useState('')
   const completedCount = checklist.items.filter((item) => item.is_completed).length
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
+    if (readOnly) return
     const trimmed = draftLabel.trim()
     if (!trimmed) return
     await onAddItem(checklist.id, trimmed)
@@ -103,6 +109,7 @@ const ChecklistCard: React.FC<{
             checklistId={checklist.id}
             item={item}
             linkedLeg={item.leg_id ? legsById.get(item.leg_id) : undefined}
+            readOnly={readOnly}
             onToggleItem={onToggleItem}
             onDeleteItem={onDeleteItem}
           />
@@ -111,12 +118,13 @@ const ChecklistCard: React.FC<{
       <form onSubmit={(e) => void handleSubmit(e)} className="flex items-center gap-2">
         <TextInput
           variant="brand"
+          disabled={readOnly}
           value={draftLabel}
           onChange={(e) => setDraftLabel(e.target.value)}
           placeholder={`Add item to ${checklist.title}...`}
           aria-label={`New item for ${checklist.title}`}
         />
-        <Button type="submit" variant="brand" size="sm" className="min-h-[44px] shrink-0">
+        <Button type="submit" variant="brand" size="sm" disabled={readOnly} className="min-h-[44px] shrink-0">
           Add
         </Button>
       </form>
@@ -127,8 +135,9 @@ const ChecklistCard: React.FC<{
 const TravelNoteArticle: React.FC<{
   note: TravelNote
   linkedLeg?: Leg
+  readOnly: boolean
   onDeleteNote: (noteId: string) => Promise<void>
-}> = ({ note, linkedLeg, onDeleteNote }) => (
+}> = ({ note, linkedLeg, readOnly, onDeleteNote }) => (
   <article
     data-testid={`travel-note-${note.id}`}
     className="rounded-ui-control bg-background/60 border border-border/80 p-3.5 space-y-2"
@@ -148,6 +157,7 @@ const TravelNoteArticle: React.FC<{
       <Button
         variant="ghost"
         size="xs"
+        disabled={readOnly}
         aria-label={`Delete note ${note.title}`}
         className="min-h-[44px] sm:min-h-[34px]"
         icon={<Trash2 className="w-3.5 h-3.5 text-rose-400" />}
@@ -162,6 +172,7 @@ export const ChecklistsAndNotesSection: React.FC<ChecklistsAndNotesSectionProps>
   checklists,
   notes,
   legs,
+  readOnly = false,
   onOpenNewChecklist,
   onAddChecklistItem,
   onToggleChecklistItem,
@@ -179,7 +190,7 @@ export const ChecklistsAndNotesSection: React.FC<ChecklistsAndNotesSectionProps>
           icon={<CheckSquare className="w-4 h-4" />}
           variant="emerald"
           actions={
-            <Button variant="brand" size="sm" className="min-h-[44px]" icon={<Plus className="w-3.5 h-3.5" />} onClick={onOpenNewChecklist}>
+            <Button variant="brand" size="sm" disabled={readOnly} className="min-h-[44px]" icon={<Plus className="w-3.5 h-3.5" />} onClick={onOpenNewChecklist}>
               New Checklist
             </Button>
           }
@@ -193,6 +204,7 @@ export const ChecklistsAndNotesSection: React.FC<ChecklistsAndNotesSectionProps>
                 key={checklist.id}
                 checklist={checklist}
                 legsById={legsById}
+                readOnly={readOnly}
                 onAddItem={onAddChecklistItem}
                 onToggleItem={onToggleChecklistItem}
                 onDeleteItem={onDeleteChecklistItem}
@@ -209,7 +221,7 @@ export const ChecklistsAndNotesSection: React.FC<ChecklistsAndNotesSectionProps>
           icon={<FileText className="w-4 h-4" />}
           variant="purple"
           actions={
-            <Button variant="outline" size="sm" className="min-h-[44px]" icon={<Plus className="w-3.5 h-3.5" />} onClick={onOpenNewNote}>
+            <Button variant="outline" size="sm" disabled={readOnly} className="min-h-[44px]" icon={<Plus className="w-3.5 h-3.5" />} onClick={onOpenNewNote}>
               Add Note
             </Button>
           }
@@ -223,6 +235,7 @@ export const ChecklistsAndNotesSection: React.FC<ChecklistsAndNotesSectionProps>
                 key={note.id}
                 note={note}
                 linkedLeg={note.leg_id ? legsById.get(note.leg_id) : undefined}
+                readOnly={readOnly}
                 onDeleteNote={onDeleteNote}
               />
             ))}

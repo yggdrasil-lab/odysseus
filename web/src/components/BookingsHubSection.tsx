@@ -35,6 +35,7 @@ const BOOKING_STATUS_OPTIONS: Array<{ id: 'all' | BookingStatus; label: string }
 export interface BookingsHubSectionProps {
   bookings: Booking[]
   attachments: Attachment[]
+  readOnly?: boolean
   onOpenNewBooking: () => void
   onEditBooking: (booking: Booking) => void
   onDeleteBooking: (bookingId: string) => Promise<void>
@@ -83,9 +84,10 @@ const SegmentSummaryRow: React.FC<{ segment: BookingSegment }> = ({ segment }) =
 
 const AttachmentRow: React.FC<{
   attachment: Attachment
+  readOnly: boolean
   onView: (attachment: Attachment) => void
   onDelete: (attachmentId: string) => Promise<void>
-}> = ({ attachment, onView, onDelete }) => (
+}> = ({ attachment, readOnly, onView, onDelete }) => (
   <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-background/70 border border-border/70 px-2.5 py-1.5 text-xs">
     <div className="flex items-center gap-2 min-w-0">
       <FileText className="w-3.5 h-3.5 text-accent shrink-0" />
@@ -96,7 +98,7 @@ const AttachmentRow: React.FC<{
       <Button variant="outline" size="xs" className="min-h-[44px] sm:min-h-[34px]" icon={<Eye className="w-3.5 h-3.5" />} onClick={() => onView(attachment)}>
         View
       </Button>
-      <Button variant="ghost" size="xs" aria-label={`Delete attachment ${attachment.filename}`} className="min-h-[44px] sm:min-h-[34px]" icon={<Trash2 className="w-3.5 h-3.5 text-rose-400" />} onClick={() => void onDelete(attachment.id)} />
+      <Button variant="ghost" size="xs" disabled={readOnly} aria-label={`Delete attachment ${attachment.filename}`} className="min-h-[44px] sm:min-h-[34px]" icon={<Trash2 className="w-3.5 h-3.5 text-rose-400" />} onClick={() => void onDelete(attachment.id)} />
     </div>
   </div>
 )
@@ -104,8 +106,9 @@ const AttachmentRow: React.FC<{
 const BookingUploadControl: React.FC<{
   bookingId: string
   bookingTitle: string
+  readOnly: boolean
   onUpload: (file: File, bookingId: string) => Promise<void>
-}> = ({ bookingId, bookingTitle, onUpload }) => {
+}> = ({ bookingId, bookingTitle, readOnly, onUpload }) => {
   const inputRef = useRef<HTMLInputElement | null>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
@@ -126,8 +129,8 @@ const BookingUploadControl: React.FC<{
 
   return (
     <div className="space-y-2">
-      <input ref={inputRef} type="file" accept="application/pdf,image/jpeg,image/png,image/webp" aria-label={`Upload document for ${bookingTitle}`} className="hidden" onChange={(e) => void handleFileChange(e)} />
-      <Button variant="outline" size="xs" loading={uploading} className="min-h-[44px] sm:min-h-[34px]" icon={<Upload className="w-3.5 h-3.5" />} onClick={() => inputRef.current?.click()}>
+      <input ref={inputRef} type="file" accept="application/pdf,image/jpeg,image/png,image/webp" aria-label={`Upload document for ${bookingTitle}`} className="hidden" disabled={readOnly} onChange={(e) => void handleFileChange(e)} />
+      <Button variant="outline" size="xs" disabled={readOnly} loading={uploading} className="min-h-[44px] sm:min-h-[34px]" icon={<Upload className="w-3.5 h-3.5" />} onClick={() => inputRef.current?.click()}>
         Attach PDF / Image
       </Button>
       {uploadError && <AlertBanner variant="error" title="Upload failed">{uploadError}</AlertBanner>}
@@ -137,9 +140,10 @@ const BookingUploadControl: React.FC<{
 
 const BookingCardHeader: React.FC<{
   booking: Booking
+  readOnly: boolean
   onEdit: (booking: Booking) => void
   onDelete: (bookingId: string) => Promise<void>
-}> = ({ booking, onEdit, onDelete }) => (
+}> = ({ booking, readOnly, onEdit, onDelete }) => (
   <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
     <div className="space-y-1 min-w-0">
       <div className="flex flex-wrap items-center gap-1.5">
@@ -160,8 +164,8 @@ const BookingCardHeader: React.FC<{
       </div>
     </div>
     <div className="flex items-center gap-1.5 shrink-0">
-      <Button variant="outline" size="xs" className="min-h-[44px] sm:min-h-[34px]" icon={<Pencil className="w-3.5 h-3.5" />} onClick={() => onEdit(booking)}>Edit</Button>
-      <Button variant="danger" size="xs" aria-label={`Delete booking ${booking.title}`} className="min-h-[44px] sm:min-h-[34px]" icon={<Trash2 className="w-3.5 h-3.5" />} onClick={() => void onDelete(booking.id)} />
+      <Button variant="outline" size="xs" disabled={readOnly} className="min-h-[44px] sm:min-h-[34px]" icon={<Pencil className="w-3.5 h-3.5" />} onClick={() => onEdit(booking)}>Edit</Button>
+      <Button variant="danger" size="xs" disabled={readOnly} aria-label={`Delete booking ${booking.title}`} className="min-h-[44px] sm:min-h-[34px]" icon={<Trash2 className="w-3.5 h-3.5" />} onClick={() => void onDelete(booking.id)} />
     </div>
   </div>
 )
@@ -169,16 +173,17 @@ const BookingCardHeader: React.FC<{
 const BookingCard: React.FC<{
   booking: Booking
   attachments: Attachment[]
+  readOnly: boolean
   onEdit: (booking: Booking) => void
   onDelete: (bookingId: string) => Promise<void>
   onUploadAttachment: (file: File, bookingId: string) => Promise<void>
   onDeleteAttachment: (attachmentId: string) => Promise<void>
   onViewAttachment: (attachment: Attachment) => void
-}> = ({ booking, attachments, onEdit, onDelete, onUploadAttachment, onDeleteAttachment, onViewAttachment }) => {
+}> = ({ booking, attachments, readOnly, onEdit, onDelete, onUploadAttachment, onDeleteAttachment, onViewAttachment }) => {
   const orderedSegments = [...booking.segments].sort((a, b) => a.segment_order - b.segment_order)
   return (
     <article data-testid={`booking-card-${booking.id}`} className="rounded-ui-control bg-background/60 border border-border/80 p-3.5 space-y-3">
-      <BookingCardHeader booking={booking} onEdit={onEdit} onDelete={onDelete} />
+      <BookingCardHeader booking={booking} readOnly={readOnly} onEdit={onEdit} onDelete={onDelete} />
       {orderedSegments.length > 0 && (
         <div className="space-y-1.5">
           {orderedSegments.map((seg) => <SegmentSummaryRow key={seg.id} segment={seg} />)}
@@ -186,8 +191,8 @@ const BookingCard: React.FC<{
       )}
       {Boolean(booking.notes) && <p className="text-xs text-slate-300 leading-relaxed">{booking.notes}</p>}
       <div className="space-y-2 pt-1 border-t border-border/50">
-        {attachments.map((att) => <AttachmentRow key={att.id} attachment={att} onView={onViewAttachment} onDelete={onDeleteAttachment} />)}
-        <BookingUploadControl bookingId={booking.id} bookingTitle={booking.title} onUpload={onUploadAttachment} />
+        {attachments.map((att) => <AttachmentRow key={att.id} attachment={att} readOnly={readOnly} onView={onViewAttachment} onDelete={onDeleteAttachment} />)}
+        <BookingUploadControl bookingId={booking.id} bookingTitle={booking.title} readOnly={readOnly} onUpload={onUploadAttachment} />
       </div>
     </article>
   )
@@ -250,7 +255,7 @@ export const BookingsHubSection: React.FC<BookingsHubSectionProps> = (props) => 
         icon={<Ticket className="w-4 h-4" />}
         variant="brand"
         actions={
-          <Button variant="brand" size="sm" className="min-h-[44px]" icon={<Plus className="w-3.5 h-3.5" />} onClick={props.onOpenNewBooking}>
+          <Button variant="brand" size="sm" disabled={props.readOnly} className="min-h-[44px]" icon={<Plus className="w-3.5 h-3.5" />} onClick={props.onOpenNewBooking}>
             Add Booking
           </Button>
         }
@@ -260,7 +265,7 @@ export const BookingsHubSection: React.FC<BookingsHubSectionProps> = (props) => 
         <EmptyState
           title="No matching bookings"
           description="Add flights, rail passes, or lodging confirmations and attach PDF tickets for offline-ready viewing."
-          action={<Button variant="outline" size="sm" className="min-h-[44px]" onClick={props.onOpenNewBooking}>Add First Booking</Button>}
+          action={<Button variant="outline" size="sm" disabled={props.readOnly} className="min-h-[44px]" onClick={props.onOpenNewBooking}>Add First Booking</Button>}
         />
       ) : (
         <div className="space-y-3">
@@ -269,6 +274,7 @@ export const BookingsHubSection: React.FC<BookingsHubSectionProps> = (props) => 
               key={booking.id}
               booking={booking}
               attachments={attachmentsByBooking.get(booking.id) ?? []}
+              readOnly={Boolean(props.readOnly)}
               onEdit={props.onEditBooking}
               onDelete={props.onDeleteBooking}
               onUploadAttachment={(file, id) => props.onUploadAttachment(file, id)}
@@ -281,7 +287,7 @@ export const BookingsHubSection: React.FC<BookingsHubSectionProps> = (props) => 
       {unattachedFiles.length > 0 && (
         <div className="space-y-2 pt-2 border-t border-border/60">
           <p className="text-[11px] font-bold uppercase tracking-wider text-muted">Trip Documents</p>
-          {unattachedFiles.map((att) => <AttachmentRow key={att.id} attachment={att} onView={props.onViewAttachment} onDelete={props.onDeleteAttachment} />)}
+          {unattachedFiles.map((att) => <AttachmentRow key={att.id} attachment={att} readOnly={Boolean(props.readOnly)} onView={props.onViewAttachment} onDelete={props.onDeleteAttachment} />)}
         </div>
       )}
     </GlassCard>
