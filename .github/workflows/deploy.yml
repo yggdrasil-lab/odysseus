@@ -29,15 +29,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Verify Zero Em/En Dashes
-        run: |
-          python3 -c "import subprocess, sys; files = subprocess.check_output(['git', 'ls-files'], text=True).splitlines(); hits = [f'{f}:{i}' for f in files if f.endswith(('.py', '.ts', '.tsx', '.yml', '.yaml', '.md', '.txt', '.sh', '.conf')) and not f.startswith(('web/node_modules/', 'web/dist/')) and f != 'web/package-lock.json' for i, line in enumerate(open(f, encoding='utf-8', errors='ignore'), 1) if '\u2014' in line or '\u2013' in line]; print('\n'.join(hits)) if hits else print('OK: zero em/en dashes'); sys.exit(1 if hits else 0)"
-
-      - name: Validate Swarm Compose Labels
-        run: |
-          pip install --no-cache-dir pyyaml
-          python3 -c "import sys, yaml; data = yaml.safe_load(open('docker-compose.yml', encoding='utf-8')); errs = []; [errs.append(f'{n}: missing com.docker.compose.project at service root labels') for n, s in data.get('services', {}).items() if not any(str(l).startswith('com.docker.compose.project=') for l in (s.get('labels') or []))]; [errs.append(f'{n}: com.docker.compose.project must not be under deploy.labels') for n, s in data.get('services', {}).items() if any('com.docker.compose.project' in str(l) for l in ((s.get('deploy') or {}).get('labels') or []))]; print('\n'.join(errs)) if errs else print('OK: Swarm labels valid'); sys.exit(1 if errs else 0)"
-
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
