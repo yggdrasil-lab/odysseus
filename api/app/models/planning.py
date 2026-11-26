@@ -36,6 +36,9 @@ class ItineraryItem(Base):
     start_utc: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     end_utc: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     place_label: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    place_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("places.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     sync_to_chronos: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("false")
     )

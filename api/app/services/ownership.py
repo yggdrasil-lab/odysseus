@@ -5,7 +5,19 @@ import uuid
 from sqlalchemy.orm import Session
 
 from app.domain.errors import DomainNotFoundError, DomainValidationError
-from app.models import Checklist, ChecklistItem, Day, ItineraryItem, Leg, TravelNote, Trip
+from app.models import (
+    Attachment,
+    Booking,
+    Checklist,
+    ChecklistItem,
+    Day,
+    ItineraryItem,
+    Leg,
+    Place,
+    RouteEstimate,
+    TravelNote,
+    Trip,
+)
 
 
 def require_trip(db: Session, trip_id: uuid.UUID) -> Trip:
@@ -82,6 +94,54 @@ def require_note_for_trip(db: Session, trip_id: uuid.UUID, note_id: uuid.UUID) -
     if note.trip_id != trip_id:
         raise DomainValidationError(f"Travel note {note_id} does not belong to trip {trip_id}.")
     return note
+
+
+def require_booking_for_trip(db: Session, trip_id: uuid.UUID, booking_id: uuid.UUID) -> Booking:
+    """Return Booking belonging to trip_id or raise 404/422."""
+    booking = db.get(Booking, booking_id)
+    if booking is None:
+        raise DomainNotFoundError(f"Booking {booking_id} not found.")
+    if booking.trip_id != trip_id:
+        raise DomainValidationError(f"Booking {booking_id} does not belong to trip {trip_id}.")
+    return booking
+
+
+def require_attachment_for_trip(
+    db: Session, trip_id: uuid.UUID, attachment_id: uuid.UUID
+) -> Attachment:
+    """Return Attachment belonging to trip_id or raise 404/422."""
+    attachment = db.get(Attachment, attachment_id)
+    if attachment is None:
+        raise DomainNotFoundError(f"Attachment {attachment_id} not found.")
+    if attachment.trip_id != trip_id:
+        raise DomainValidationError(
+            f"Attachment {attachment_id} does not belong to trip {trip_id}."
+        )
+    return attachment
+
+
+def require_place_for_trip(db: Session, trip_id: uuid.UUID, place_id: uuid.UUID) -> Place:
+    """Return Place belonging to trip_id or raise 404/422."""
+    place = db.get(Place, place_id)
+    if place is None:
+        raise DomainNotFoundError(f"Place {place_id} not found.")
+    if place.trip_id != trip_id:
+        raise DomainValidationError(f"Place {place_id} does not belong to trip {trip_id}.")
+    return place
+
+
+def require_route_for_trip(
+    db: Session, trip_id: uuid.UUID, route_id: uuid.UUID
+) -> RouteEstimate:
+    """Return RouteEstimate belonging to trip_id or raise 404/422."""
+    route = db.get(RouteEstimate, route_id)
+    if route is None:
+        raise DomainNotFoundError(f"Route estimate {route_id} not found.")
+    if route.trip_id != trip_id:
+        raise DomainValidationError(
+            f"Route estimate {route_id} does not belong to trip {trip_id}."
+        )
+    return route
 
 
 def reject_explicit_nulls(payload: object, required_fields: tuple[str, ...]) -> None:

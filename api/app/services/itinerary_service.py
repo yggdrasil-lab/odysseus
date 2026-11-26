@@ -12,6 +12,7 @@ from app.services.ownership import (
     reject_explicit_nulls,
     require_day_for_trip,
     require_itinerary_item_for_trip,
+    require_place_for_trip,
     require_trip,
 )
 
@@ -39,6 +40,8 @@ def create_itinerary_item(
     require_trip(db, trip_id)
     if payload.day_id is not None:
         require_day_for_trip(db, trip_id, payload.day_id)
+    if payload.place_id is not None:
+        require_place_for_trip(db, trip_id, payload.place_id)
 
     start_utc, end_utc = compute_item_utc_bounds(
         payload.start_local,
@@ -72,6 +75,8 @@ def update_itinerary_item(
 
     if "day_id" in updates and updates["day_id"] is not None:
         require_day_for_trip(db, trip_id, updates["day_id"])
+    if "place_id" in updates and updates["place_id"] is not None:
+        require_place_for_trip(db, trip_id, updates["place_id"])
 
     next_start_local = updates["start_local"] if "start_local" in updates else item.start_local
     next_start_tz = updates["start_tz"] if "start_tz" in updates else item.start_tz
