@@ -1,3 +1,6 @@
+import '@yggdrasil-lab/ui/style.css'
+import './index.css'
+
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 

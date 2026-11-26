@@ -8,16 +8,8 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      selfDestroying: true,
       manifest: false,
-      includeAssets: ['favicon.svg', 'manifest.webmanifest'],
-      workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
-        navigateFallbackDenylist: [/^\/api\//],
-        cleanupOutdatedCaches: true,
-        clientsClaim: true,
-        skipWaiting: true,
-      },
     }),
   ],
   server: {
