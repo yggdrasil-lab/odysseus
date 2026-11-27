@@ -28,6 +28,10 @@ class NoCacheMiddleware:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
+        path = scope.get("path", "")
+        if path.startswith("/trips/") and "/photos/" in path and path.endswith("/thumbnail"):
+            await self.app(scope, receive, send)
+            return
 
         async def send_with_no_cache(message: Message) -> None:
             if message["type"] == "http.response.start":

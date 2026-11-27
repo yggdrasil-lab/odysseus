@@ -24,6 +24,7 @@ export interface WorkspaceViewsProps {
   onOpenNewLeg: () => void
   onOpenNewItem: (dayId: string | null) => void
   onOpenChronosSync: () => void
+  onOpenTripSettings: () => void
   onOpenNewChecklist: () => void
   onOpenNewNote: () => void
   onOpenNewBooking: () => void
@@ -45,9 +46,12 @@ function buildTimelineNode(props: WorkspaceViewsProps) {
     <TripDocumentTimeline
       trips={state.trips} trip={workspace.trip} legs={workspace.legs} days={workspace.days}
       items={workspace.itinerary_items} bookings={workspace.bookings} places={workspace.places}
+      tripPhotos={state.tripPhotos} tripPhotosLoading={state.tripPhotosLoading}
       readOnly={state.isOffline} onSelectTrip={(id) => void state.selectTrip(id)}
       onOpenNewTrip={props.onOpenNewTrip} onOpenNewLeg={props.onOpenNewLeg} onOpenNewItem={props.onOpenNewItem}
-      onOpenChronosSync={props.onOpenChronosSync} onToggleItemDone={handleToggleDone}
+      onOpenChronosSync={props.onOpenChronosSync} onOpenTripSettings={props.onOpenTripSettings}
+      onExportMarkdown={state.exportTripMarkdown} onRetryTripPhotos={state.retryTripPhotos}
+      onToggleItemDone={handleToggleDone}
       onToggleItemChronosSync={handleToggleChronosSync}
       onMoveItemDay={(itemId, dayId) => state.updateItem(itemId, { day_id: dayId })}
       onDeleteItem={state.deleteItem}

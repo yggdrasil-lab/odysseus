@@ -60,6 +60,7 @@ import type {
   Trip,
   TripBudgetSummary,
   TripCreatePayload,
+  TripPhotosResponse,
   TripUpdatePayload,
   TripWorkspace,
   UnassignedBooking,
@@ -70,6 +71,10 @@ interface SyntheticAdapterOptions {
   emptyTrips?: boolean
   extraBookings?: Booking[]
   initialUnassigned?: UnassignedBooking[]
+  photosResponse?: TripPhotosResponse
+  photosError?: Error
+  onGetTripPhotos?: () => void
+  markdownExport?: string
 }
 
 function createSyntheticAdapter(
@@ -355,6 +360,12 @@ function createSyntheticAdapter(
     updateTrip: async (_tripId: string, payload: TripUpdatePayload) => {
       if (payload.budget_nzd !== undefined) {
         trip.budget_nzd = payload.budget_nzd === null ? null : String(payload.budget_nzd)
+      }
+      if (payload.immich_album_id !== undefined) {
+        trip.immich_album_id = payload.immich_album_id
+      }
+      if (payload.vault_note_path !== undefined) {
+        trip.vault_note_path = payload.vault_note_path
       }
       return { ...trip }
     },
@@ -721,6 +732,24 @@ function createSyntheticAdapter(
     }),
     sharedAttachmentContentUrl: (token: string, attachmentId: string) =>
       `/api/share/${token}/attachments/${attachmentId}/content`,
+    getTripPhotos: async (): Promise<TripPhotosResponse> => {
+      opts.onGetTripPhotos?.()
+      if (opts.photosError) throw opts.photosError
+      return (
+        opts.photosResponse ?? {
+          trip_id: trip.id,
+          status: 'available',
+          source: 'date_range',
+          message: null,
+          total_photos: 0,
+          days: [],
+          ungrouped_photos: [],
+        }
+      )
+    },
+    exportTripMarkdown: async (): Promise<string> =>
+      opts.markdownExport ??
+      `---\ntype: trip-snapshot\ntrip_slug: ${trip.slug}\n---\n# ${trip.title}\n`,
   }
 }
 
@@ -1099,5 +1128,193 @@ describe('Ticket 10 Inbound Email Bookings & Draft Review', () => {
     expect(await screen.findByText('Offline Read-Only')).toBeInTheDocument()
     expect(screen.getAllByText('From Iris').length).toBeGreaterThan(0)
     expect(screen.getAllByRole('button', { name: 'Confirm' })[0]).toBeDisabled()
+  })
+})
+
+describe('Ticket 11 Immich Photo Strip & One-Way Markdown Export', () => {
+  it('renders lazy per-Day Immich thumbnails in author mode with external web links', async () => {
+    const adapter = createSyntheticAdapter({
+      photosResponse: {
+        trip_id: 'trip-1',
+        status: 'available',
+        source: 'date_range',
+        message: null,
+        total_photos: 1,
+        days: [
+          {
+            day_id: 'day-1',
+            date: '2027-01-12',
+            photos: [
+              {
+                asset_id: 'img-1',
+                original_filename: 'ferry.jpg',
+                captured_at: '2027-01-12T11:30:00Z',
+                local_date: '2027-01-12',
+                thumbnail_url: '/api/trips/trip-1/photos/img-1/thumbnail',
+                web_url: 'https://photos.home.example/photos/img-1',
+                thumbhash: null,
+              },
+            ],
+          },
+        ],
+        ungrouped_photos: [],
+      },
+    })
+    render(<App adapter={adapter} offlineStorage={new InMemoryOfflineStorageAdapter()} />)
+
+    const strips = await screen.findAllByTestId('day-photo-strip')
+    expect(strips.length).toBeGreaterThan(0)
+    const img = strips[0].querySelector('img')
+    expect(img).toHaveAttribute('src', '/api/trips/trip-1/photos/img-1/thumbnail')
+    expect(img).toHaveAttribute('loading', 'lazy')
+    const link = strips[0].querySelector('a')
+    expect(link).toHaveAttribute('href', 'https://photos.home.example/photos/img-1')
+  })
+
+  it('degrades to Immich offline banner with Retry and recovers on retry', async () => {
+    let callCount = 0
+    const base = createSyntheticAdapter()
+    const adapter: OdysseusApiAdapter = {
+      ...base,
+      getTripPhotos: async () => {
+        callCount += 1
+        if (callCount === 1) {
+          return {
+            trip_id: 'trip-1',
+            status: 'offline',
+            source: 'album',
+            message: 'Immich offline (Muspelheim asleep)',
+            total_photos: 0,
+            days: [],
+            ungrouped_photos: [],
+          }
+        }
+        return {
+          trip_id: 'trip-1',
+          status: 'available',
+          source: 'album',
+          message: null,
+          total_photos: 1,
+          days: [
+            {
+              day_id: 'day-1',
+              date: '2027-01-12',
+              photos: [
+                {
+                  asset_id: 'img-retry',
+                  original_filename: 'recovered.jpg',
+                  captured_at: null,
+                  local_date: '2027-01-12',
+                  thumbnail_url: '/api/trips/trip-1/photos/img-retry/thumbnail',
+                  web_url: null,
+                  thumbhash: null,
+                },
+              ],
+            },
+          ],
+          ungrouped_photos: [],
+        }
+      },
+    }
+    render(<App adapter={adapter} offlineStorage={new InMemoryOfflineStorageAdapter()} />)
+
+    const banners = await screen.findAllByTestId('immich-offline-banner')
+    expect(banners[0]).toHaveTextContent('Immich offline (Muspelheim asleep)')
+    fireEvent.click(banners[0].querySelector('button')!)
+
+    const strips = await screen.findAllByTestId('day-photo-strip')
+    expect(strips[0].querySelector('img')).toHaveAttribute(
+      'src',
+      '/api/trips/trip-1/photos/img-retry/thumbnail',
+    )
+    expect(screen.queryByTestId('immich-offline-banner')).not.toBeInTheDocument()
+  })
+
+  it('never fetches Immich photos in offline mode or /share/:token companion mode', async () => {
+    const getPhotosSpy = vi.fn()
+    const adapter = createSyntheticAdapter({ onGetTripPhotos: getPhotosSpy })
+    const storage = new InMemoryOfflineStorageAdapter()
+    const workspace = await adapter.getWorkspace('trip-1')
+    await storage.putTripRecord({
+      tripId: 'trip-1',
+      syncedAt: '2027-01-10T10:00:00Z',
+      workspaceSha256: 'ws-sha',
+      workspace,
+      attachmentIds: ['att-1'],
+      mapPackIds: [],
+      totalBytes: 2048,
+      includesMapPacks: false,
+    })
+
+    Object.defineProperty(window.navigator, 'onLine', { configurable: true, value: false })
+    render(<App adapter={adapter} offlineStorage={storage} />)
+    expect(await screen.findByText('Offline Read-Only')).toBeInTheDocument()
+    expect(getPhotosSpy).not.toHaveBeenCalled()
+    expect(screen.getAllByRole('button', { name: 'Copy Markdown' })[0]).toBeDisabled()
+    expect(screen.getAllByRole('button', { name: 'Download .md' })[0]).toBeDisabled()
+
+    cleanup()
+    Object.defineProperty(window.navigator, 'onLine', { configurable: true, value: true })
+    render(
+      <App
+        adapter={adapter}
+        offlineStorage={storage}
+        initialPath="/share/tok-synthetic-1"
+      />,
+    )
+    expect(await screen.findByText('Shared Read-Only')).toBeInTheDocument()
+    expect(getPhotosSpy).not.toHaveBeenCalled()
+    expect(screen.queryByRole('button', { name: 'Copy Markdown' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Trip Links' })).not.toBeInTheDocument()
+  })
+
+  it('copies Markdown, downloads .md, and updates immich_album_id and vault_note_path via Trip Links', async () => {
+    const writeTextMock = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: writeTextMock },
+    })
+    const createObjectUrlSpy = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock-md')
+    const revokeObjectUrlSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+    const anchorClickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+
+    const adapter = createSyntheticAdapter({
+      markdownExport: '---\ntype: trip-snapshot\n---\n# Pacific Explorer\n',
+    })
+    render(<App adapter={adapter} offlineStorage={new InMemoryOfflineStorageAdapter()} />)
+
+    const copyButtons = await screen.findAllByRole('button', { name: 'Copy Markdown' })
+    fireEvent.click(copyButtons[0])
+    await waitFor(() => {
+      expect(writeTextMock).toHaveBeenCalledWith('---\ntype: trip-snapshot\n---\n# Pacific Explorer\n')
+    })
+
+    const downloadButtons = screen.getAllByRole('button', { name: 'Download .md' })
+    fireEvent.click(downloadButtons[0])
+    await waitFor(() => {
+      expect(createObjectUrlSpy).toHaveBeenCalled()
+      expect(anchorClickSpy).toHaveBeenCalled()
+      expect(revokeObjectUrlSpy).toHaveBeenCalledWith('blob:mock-md')
+    })
+
+    const linksButtons = screen.getAllByRole('button', { name: 'Trip Links' })
+    fireEvent.click(linksButtons[0])
+    const modal = await screen.findByTestId('trip-settings-modal')
+    expect(modal).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Immich Album ID'), {
+      target: { value: 'album-999' },
+    })
+    fireEvent.change(screen.getByLabelText('Obsidian Vault Note Path'), {
+      target: { value: 'second-brain/Areas/40-Leisure/Pacific Explorer.md' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save Links' }))
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('trip-settings-modal')).not.toBeInTheDocument()
+    })
+    expect(screen.getAllByTestId('vault-note-path-pill')[0]).toHaveTextContent(
+      'second-brain/Areas/40-Leisure/Pacific Explorer.md',
+    )
   })
 })

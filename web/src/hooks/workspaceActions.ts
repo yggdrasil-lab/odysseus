@@ -35,6 +35,8 @@ function buildCoreActions({ adapter, runMutation, onTripCreated, onActionError }
     },
     updateTripBudget: (budgetNzd: string | null) =>
       runMutation((id) => adapter.updateTrip(id, { budget_nzd: budgetNzd }).then(() => undefined)),
+    updateTripLinks: (payload: { immich_album_id: string | null; vault_note_path: string | null }) =>
+      runMutation((id) => adapter.updateTrip(id, payload).then(() => undefined)),
     createLeg: (payload: LegCreatePayload) => runMutation((id) => adapter.createLeg(id, payload).then(() => undefined)),
     createItem: (payload: ItineraryItemCreatePayload) => runMutation((id) => adapter.createItineraryItem(id, payload).then(() => undefined)),
     updateItem: (itemId: string, payload: ItineraryItemUpdatePayload) => runMutation((id) => adapter.updateItineraryItem(id, itemId, payload).then(() => undefined)),

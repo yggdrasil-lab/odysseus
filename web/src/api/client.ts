@@ -40,6 +40,7 @@ import type {
   Trip,
   TripBudgetSummary,
   TripCreatePayload,
+  TripPhotosResponse,
   TripUpdatePayload,
   TripWorkspace,
   UnassignedBooking,
@@ -153,6 +154,8 @@ export interface OdysseusApiAdapter {
   deleteShareToken(tripId: string, tokenId: string): Promise<void>
   getSharedTrip(token: string, signal?: AbortSignal): Promise<SharedTripView>
   sharedAttachmentContentUrl(token: string, attachmentId: string): string
+  getTripPhotos(tripId: string, signal?: AbortSignal): Promise<TripPhotosResponse>
+  exportTripMarkdown(tripId: string, signal?: AbortSignal): Promise<string>
 }
 
 function isAuthentikGateResponse(response: Response): boolean {
@@ -191,7 +194,7 @@ export class OdysseusHttpAdapter implements OdysseusApiAdapter {
     this.fetchImpl = options?.fetchImpl ?? ((input, init) => globalThis.fetch(input, init))
   }
 
-  private async request<T>(path: string, init?: RequestInit): Promise<T> {
+  private async fetchChecked(path: string, init?: RequestInit): Promise<Response> {
     const isMultipart = init?.body instanceof FormData
     const headers: HeadersInit = isMultipart
       ? { ...(init?.headers ?? {}) }
@@ -227,10 +230,14 @@ export class OdysseusHttpAdapter implements OdysseusApiAdapter {
       throw new OdysseusApiError({ status: response.status, detail, path })
     }
 
+    return response
+  }
+
+  private async request<T>(path: string, init?: RequestInit): Promise<T> {
+    const response = await this.fetchChecked(path, init)
     if (response.status === 204) {
       return undefined as T
     }
-
     return (await response.json()) as T
   }
 
@@ -555,6 +562,15 @@ export class OdysseusHttpAdapter implements OdysseusApiAdapter {
 
   sharedAttachmentContentUrl(token: string, attachmentId: string): string {
     return `${this.baseUrl}/share/${encodeURIComponent(token)}/attachments/${attachmentId}/content`
+  }
+
+  getTripPhotos(tripId: string, signal?: AbortSignal): Promise<TripPhotosResponse> {
+    return this.request<TripPhotosResponse>(`/trips/${tripId}/photos`, { signal })
+  }
+
+  async exportTripMarkdown(tripId: string, signal?: AbortSignal): Promise<string> {
+    const response = await this.fetchChecked(`/trips/${tripId}/export/markdown`, { signal })
+    return response.text()
   }
 }
 

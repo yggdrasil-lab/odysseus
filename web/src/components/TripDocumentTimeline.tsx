@@ -1,10 +1,15 @@
-import React from 'react'
+import React, { useState } from 'react'
 import {
   CalendarCheck2,
   CalendarDays,
+  Check,
   CheckCircle2,
   Clock,
+  Copy,
+  Download,
+  FileText,
   Inbox,
+  Link2,
   MapPin,
   PlaneLanding,
   PlaneTakeoff,
@@ -26,14 +31,17 @@ import type {
   Booking,
   BookingSegment,
   Day,
+  ImmichPhotoItem,
   ItineraryItem,
   Leg,
   Place,
   SharedBooking,
   SharedTripSummary,
   Trip,
+  TripPhotosResponse,
   TripStatus,
 } from '../types'
+import { DayPhotoStrip, ImmichStatusBanner } from './DayPhotoStrip'
 
 type TimelineTrip = Trip | SharedTripSummary
 type TimelineBooking = Booking | SharedBooking
@@ -61,6 +69,8 @@ export interface TripDocumentTimelineProps {
   items: ItineraryItem[]
   bookings?: TimelineBooking[]
   places?: Place[]
+  tripPhotos?: TripPhotosResponse | null
+  tripPhotosLoading?: boolean
   readOnly?: boolean
   companionMode?: boolean
   onSelectTrip: (tripId: string) => void
@@ -68,6 +78,9 @@ export interface TripDocumentTimelineProps {
   onOpenNewLeg: () => void
   onOpenNewItem: (defaultDayId: string | null) => void
   onOpenChronosSync?: () => void
+  onOpenTripSettings?: () => void
+  onExportMarkdown?: () => Promise<string>
+  onRetryTripPhotos?: () => void
   onToggleItemDone: (item: ItineraryItem) => Promise<void>
   onToggleItemChronosSync?: (item: ItineraryItem) => Promise<void>
   onMoveItemDay: (itemId: string, dayId: string | null) => Promise<void>
@@ -330,6 +343,62 @@ const TripOverviewActions: React.FC<{
   </div>
 )
 
+function triggerMarkdownDownload(tripSlug: string, markdown: string): void {
+  const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = `${tripSlug}.md`
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  URL.revokeObjectURL(url)
+}
+
+const TripExportAndLinksBar: React.FC<{
+  tripSlug: string
+  vaultNotePath: string | null
+  readOnly: boolean
+  onOpenTripSettings?: () => void
+  onExportMarkdown?: () => Promise<string>
+}> = ({ tripSlug, vaultNotePath, readOnly, onOpenTripSettings, onExportMarkdown }) => {
+  const [copied, setCopied] = useState(false)
+  const [busy, setBusy] = useState(false)
+
+  const runExport = async (mode: 'copy' | 'download') => {
+    if (!onExportMarkdown || readOnly) return
+    setBusy(true)
+    try {
+      const md = await onExportMarkdown()
+      if (mode === 'download') { triggerMarkdownDownload(tripSlug, md); return }
+      if (typeof navigator !== 'undefined' && navigator.clipboard) await navigator.clipboard.writeText(md)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } finally { setBusy(false) }
+  }
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-2.5">
+      <div className="flex flex-wrap items-center gap-2 min-w-0">
+        {Boolean(vaultNotePath) && (
+          <span data-testid="vault-note-path-pill" className="inline-flex items-center gap-1.5 rounded-full bg-background/80 border border-border px-2.5 py-1 text-[11px] font-mono text-muted max-w-full truncate" title={vaultNotePath as string}>
+            <FileText className="w-3 h-3 text-accent shrink-0" /><span className="truncate">{vaultNotePath}</span>
+          </span>
+        )}
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        {onExportMarkdown && (
+          <>
+            <Button variant="outline" size="xs" disabled={readOnly || busy} className="min-h-[44px] sm:min-h-[34px]" icon={copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />} onClick={() => void runExport('copy')}>{copied ? 'Copied!' : 'Copy Markdown'}</Button>
+            <Button variant="outline" size="xs" disabled={readOnly || busy} className="min-h-[44px] sm:min-h-[34px]" icon={<Download className="w-3.5 h-3.5" />} onClick={() => void runExport('download')}>Download .md</Button>
+          </>
+        )}
+        {onOpenTripSettings && <Button variant="outline" size="xs" disabled={readOnly} className="min-h-[44px] sm:min-h-[34px]" icon={<Link2 className="w-3.5 h-3.5" />} onClick={onOpenTripSettings}>Trip Links</Button>}
+      </div>
+    </div>
+  )
+}
+
 const TripOverviewCard: React.FC<{
   trips: TimelineTrip[]
   trip: TimelineTrip
@@ -340,9 +409,12 @@ const TripOverviewCard: React.FC<{
   onOpenNewTrip: () => void
   onOpenNewLeg: () => void
   onOpenChronosSync?: () => void
-}> = ({ trips, trip, legs, readOnly, companionMode, onSelectTrip, onOpenNewTrip, onOpenNewLeg, onOpenChronosSync }) => {
+  onOpenTripSettings?: () => void
+  onExportMarkdown?: () => Promise<string>
+}> = ({ trips, trip, legs, readOnly, companionMode, onSelectTrip, onOpenNewTrip, onOpenNewLeg, onOpenChronosSync, onOpenTripSettings, onExportMarkdown }) => {
   const dateSummary = trip.start_date && trip.end_date ? `${trip.start_date} to ${trip.end_date}` : 'Dates flexible (planning)'
   const chronosEnabled = 'chronos_sync_enabled' in trip && Boolean(trip.chronos_sync_enabled)
+  const vaultNotePath = !companionMode && 'vault_note_path' in trip ? trip.vault_note_path : null
 
   return (
     <GlassCard id="section-overview" tone="glass" padding="md" className="space-y-4">
@@ -373,6 +445,9 @@ const TripOverviewCard: React.FC<{
         )}
       </div>
       {Boolean(trip.summary) && <p className="text-xs text-slate-300 leading-relaxed border-t border-border/60 pt-3">{trip.summary}</p>}
+      {!companionMode && (onExportMarkdown || onOpenTripSettings || Boolean(vaultNotePath)) && (
+        <TripExportAndLinksBar tripSlug={trip.slug} vaultNotePath={vaultNotePath} readOnly={readOnly} onOpenTripSettings={onOpenTripSettings} onExportMarkdown={onExportMarkdown} />
+      )}
       <LegChaptersList legs={legs} readOnly={readOnly} companionMode={companionMode} onOpenNewLeg={onOpenNewLeg} />
     </GlassCard>
   )
@@ -383,6 +458,7 @@ const DayCard: React.FC<{
   coveringLegs: Leg[]
   dayItems: ItineraryItem[]
   daySegments: DaySegmentEntry[]
+  dayPhotos: ImmichPhotoItem[]
   placesById: Map<string, Place>
   readOnly: boolean
   companionMode: boolean
@@ -397,6 +473,7 @@ const DayCard: React.FC<{
   coveringLegs,
   dayItems,
   daySegments,
+  dayPhotos,
   placesById,
   readOnly,
   companionMode,
@@ -457,7 +534,7 @@ const DayCard: React.FC<{
       </div>
     )}
 
-    {dayItems.length === 0 && daySegments.length === 0 ? (
+    {dayItems.length === 0 && daySegments.length === 0 && dayPhotos.length === 0 ? (
       <p className="text-xs text-muted italic">No scheduled items for this day.</p>
     ) : (
       dayItems.length > 0 && (
@@ -478,6 +555,8 @@ const DayCard: React.FC<{
         </div>
       )
     )}
+
+    <DayPhotoStrip photos={dayPhotos} companionMode={companionMode} readOnly={readOnly} />
   </section>
 )
 
@@ -596,6 +675,7 @@ const TimelineDaysSection: React.FC<{
   legs: Leg[]
   items: ItineraryItem[]
   segmentsByDate: Map<string, DaySegmentEntry[]>
+  photosByDayId: Map<string, ImmichPhotoItem[]>
   placesById: Map<string, Place>
   readOnly: boolean
   companionMode: boolean
@@ -628,7 +708,9 @@ const TimelineDaysSection: React.FC<{
           <DayCard
             key={day.id} day={day} coveringLegs={legsCoveringDate(p.legs, day.date)}
             dayItems={p.items.filter((item) => item.day_id === day.id)}
-            daySegments={p.segmentsByDate.get(day.date) ?? []} placesById={p.placesById}
+            daySegments={p.segmentsByDate.get(day.date) ?? []}
+            dayPhotos={p.photosByDayId.get(day.id) ?? []}
+            placesById={p.placesById}
             readOnly={p.readOnly} companionMode={p.companionMode} chronosSyncEnabled={p.chronosSyncEnabled}
             onOpenNewItem={p.onOpenNewItem} onToggleItemDone={p.onToggleItemDone}
             onToggleItemChronosSync={p.onToggleItemChronosSync}
@@ -647,14 +729,25 @@ export const TripDocumentTimeline: React.FC<TripDocumentTimelineProps> = (props)
   const backlogItems = props.items.filter((item) => item.day_id === null)
   const placesById = new Map((props.places ?? []).map((p) => [p.id, p]))
   const segmentsByDate = buildDaySegmentsMap(props.bookings ?? [])
+  const photosByDayId = new Map((props.tripPhotos?.days ?? []).map((entry) => [entry.day_id, entry.photos]))
   return (
     <div className="space-y-4">
       <TripOverviewCard
         trips={props.trips} trip={props.trip} legs={props.legs} readOnly={readOnly} companionMode={companionMode}
-        onSelectTrip={props.onSelectTrip} onOpenNewTrip={props.onOpenNewTrip} onOpenNewLeg={props.onOpenNewLeg} onOpenChronosSync={props.onOpenChronosSync}
+        onSelectTrip={props.onSelectTrip} onOpenNewTrip={props.onOpenNewTrip} onOpenNewLeg={props.onOpenNewLeg}
+        onOpenChronosSync={props.onOpenChronosSync} onOpenTripSettings={props.onOpenTripSettings}
+        onExportMarkdown={props.onExportMarkdown}
+      />
+      <ImmichStatusBanner
+        photosResponse={props.tripPhotos ?? null}
+        isLoading={props.tripPhotosLoading}
+        companionMode={companionMode}
+        readOnly={readOnly}
+        onRetry={props.onRetryTripPhotos ?? (() => {})}
       />
       <TimelineDaysSection
-        days={props.days} legs={props.legs} items={props.items} segmentsByDate={segmentsByDate} placesById={placesById}
+        days={props.days} legs={props.legs} items={props.items} segmentsByDate={segmentsByDate}
+        photosByDayId={photosByDayId} placesById={placesById}
         readOnly={readOnly} companionMode={companionMode} chronosSyncEnabled={chronosSyncEnabled}
         onOpenNewItem={props.onOpenNewItem} onToggleItemDone={props.onToggleItemDone}
         onToggleItemChronosSync={props.onToggleItemChronosSync} onMoveItemDay={props.onMoveItemDay} onDeleteItem={props.onDeleteItem}

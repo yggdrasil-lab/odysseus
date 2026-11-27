@@ -25,6 +25,13 @@ from app.schemas.chronos import (
     ChronosSyncRequest,
     ChronosSyncResultRead,
 )
+from app.schemas.immich import (
+    ImmichDayPhotosRead,
+    ImmichPhotoItemRead,
+    ImmichPhotoSource,
+    ImmichPhotoStatus,
+    TripPhotosResponseRead,
+)
 from app.schemas.integrations import (
     InboundEmailAttachmentPayload,
     InboundEmailIngestResponse,
@@ -124,6 +131,10 @@ __all__ = [
     "DayRoutesComputeRequest",
     "DayRoutesComputeResponse",
     "DayUpdate",
+    "ImmichDayPhotosRead",
+    "ImmichPhotoItemRead",
+    "ImmichPhotoSource",
+    "ImmichPhotoStatus",
     "InboundEmailAttachmentPayload",
     "InboundEmailIngestResponse",
     "InboundEmailWebhookPayload",
@@ -167,6 +178,7 @@ __all__ = [
     "TravelNoteUpdate",
     "TripBudgetSummaryRead",
     "TripCreate",
+    "TripPhotosResponseRead",
     "TripRead",
     "TripStatus",
     "TripUpdate",

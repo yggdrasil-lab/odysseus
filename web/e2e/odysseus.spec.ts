@@ -54,9 +54,18 @@ function buildMinimalPmtilesBuffer(): Buffer {
   return buf
 }
 
+function buildSyntheticPngBuffer(): Buffer {
+  // Valid 1x1 transparent PNG
+  return Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+    'base64',
+  )
+}
+
 interface MockApiOptions {
   onApiRequest?: (path: string) => void
   seedInbound?: boolean
+  photosMode?: 'empty' | 'available' | 'offline'
 }
 
 async function mockOdysseusApi(
@@ -70,6 +79,8 @@ async function mockOdysseusApi(
   const onApiRequest = opts.onApiRequest
   const pdfBuffer = buildSyntheticPdfBuffer()
   const pmtilesBuffer = buildMinimalPmtilesBuffer()
+  const pngBuffer = buildSyntheticPngBuffer()
+  const photosMode = opts.photosMode ?? 'empty'
 
   const trip = {
     id: '11111111-1111-4111-8111-111111111111',
@@ -643,7 +654,101 @@ async function mockOdysseusApi(
       if ('budget_nzd' in body) {
         trip.budget_nzd = body.budget_nzd === null ? null : String(body.budget_nzd)
       }
+      if ('immich_album_id' in body) {
+        trip.immich_album_id = body.immich_album_id === null ? null : String(body.immich_album_id)
+      }
+      if ('vault_note_path' in body) {
+        trip.vault_note_path = body.vault_note_path === null ? null : String(body.vault_note_path)
+      }
       await route.fulfill({ json: trip })
+      return
+    }
+    if (path === `/trips/${trip.id}/photos` && req.method() === 'GET') {
+      if (photosMode === 'offline') {
+        await route.fulfill({
+          json: {
+            trip_id: trip.id,
+            status: 'offline',
+            source: trip.immich_album_id ? 'album' : 'date_range',
+            message: 'Immich offline (Muspelheim asleep)',
+            total_photos: 0,
+            days: [],
+            ungrouped_photos: [],
+          },
+        })
+        return
+      }
+      if (photosMode === 'available') {
+        await route.fulfill({
+          json: {
+            trip_id: trip.id,
+            status: 'available',
+            source: trip.immich_album_id ? 'album' : 'date_range',
+            message: null,
+            total_photos: 2,
+            days: [
+              {
+                day_id: days[0].id,
+                date: days[0].date,
+                photos: [
+                  {
+                    asset_id: 'immich-asset-1',
+                    original_filename: 'harbor-ferry.png',
+                    captured_at: '2027-01-12T10:00:00Z',
+                    local_date: '2027-01-12',
+                    thumbnail_url: `/api/trips/${trip.id}/photos/immich-asset-1/thumbnail`,
+                    web_url: 'https://photos.example.test/photos/immich-asset-1',
+                    thumbhash: null,
+                  },
+                  {
+                    asset_id: 'immich-asset-2',
+                    original_filename: 'quay-lunch.png',
+                    captured_at: '2027-01-12T13:15:00Z',
+                    local_date: '2027-01-12',
+                    thumbnail_url: `/api/trips/${trip.id}/photos/immich-asset-2/thumbnail`,
+                    web_url: 'https://photos.example.test/photos/immich-asset-2',
+                    thumbhash: null,
+                  },
+                ],
+              },
+            ],
+            ungrouped_photos: [],
+          },
+        })
+        return
+      }
+      await route.fulfill({
+        json: {
+          trip_id: trip.id,
+          status: 'available',
+          source: 'date_range',
+          message: null,
+          total_photos: 0,
+          days: [],
+          ungrouped_photos: [],
+        },
+      })
+      return
+    }
+    if (/^\/trips\/[^/]+\/photos\/[^/]+\/thumbnail$/.test(path) && req.method() === 'GET') {
+      await route.fulfill({
+        status: 200,
+        headers: { 'Content-Type': 'image/png', 'Cache-Control': 'private, max-age=300' },
+        body: pngBuffer,
+      })
+      return
+    }
+    if (path === `/trips/${trip.id}/export/markdown` && req.method() === 'GET') {
+      const vaultFrontmatter = trip.vault_note_path ? `vault_note_path: "${trip.vault_note_path}"\n` : ''
+      const md = `---\ntype: trip-snapshot\ntrip_slug: ${trip.slug}\n${vaultFrontmatter}---\n# ${trip.title}\n\n## Day-by-Day Itinerary\n`
+      await route.fulfill({
+        status: 200,
+        headers: {
+          'Content-Type': 'text/markdown; charset=utf-8',
+          'Content-Disposition': `attachment; filename="${trip.slug}.md"`,
+        },
+        body: md,
+      })
       return
     }
     if (/^\/trips\/[^/]+\/budget$/.test(path) && req.method() === 'GET') {
@@ -1356,6 +1461,80 @@ for (const platform of MOBILE_PLATFORMS) {
       await draftCard.getByRole('button', { name: 'Confirm' }).click()
       await expect(draftCard.getByRole('button', { name: 'Confirm' })).toHaveCount(0)
       await assertNoHorizontalOverflow(page)
+    })
+  })
+}
+
+test.describe('Ticket 11 - Immich Photo Strip & Markdown Export', () => {
+  test('renders per-Day Immich photo strip, saves Trip Links, exports Markdown, and renders offline banner on desktop', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await mockOdysseusApi(page, { photosMode: 'available' })
+    await page.goto('/')
+
+    const desktop = page.getByTestId('desktop-workspace')
+    const strip = desktop.getByTestId('day-photo-strip').first()
+    await expect(strip).toBeVisible()
+    await expect(strip.locator('img')).toHaveCount(2)
+    await expect(strip.locator('a').first()).toHaveAttribute('href', 'https://photos.example.test/photos/immich-asset-1')
+
+    await desktop.getByRole('button', { name: 'Trip Links' }).click()
+    const modal = page.getByTestId('trip-settings-modal')
+    await expect(modal).toBeVisible()
+    await modal.getByLabel('Immich Album ID').fill('album-pacific-2027')
+    await modal.getByLabel('Obsidian Vault Note Path').fill('second-brain/Areas/40-Leisure/Pacific Explorer.md')
+    await modal.getByRole('button', { name: 'Save Links' }).click()
+    await expect(modal).toHaveCount(0)
+    await expect(desktop.getByTestId('vault-note-path-pill')).toContainText('second-brain/Areas/40-Leisure/Pacific Explorer.md')
+
+    const downloadPromise = page.waitForEvent('download')
+    await desktop.getByRole('button', { name: 'Download .md' }).click()
+    const download = await downloadPromise
+    expect(download.suggestedFilename()).toBe('pacific-explorer.md')
+
+    await assertNoHorizontalOverflow(page)
+    await page.waitForTimeout(250)
+    await page.screenshot({ path: 'screenshots/desktop/11-immich-photos-export.png' })
+
+    // Verify degraded Immich offline banner
+    await page.unrouteAll({ behavior: 'ignoreErrors' })
+    await mockOdysseusApi(page, { photosMode: 'offline' })
+    await page.goto('/')
+    await expect(desktop.getByTestId('immich-offline-banner')).toContainText('Immich offline (Muspelheim asleep)')
+  })
+})
+
+for (const platform of MOBILE_PLATFORMS) {
+  test.describe(`Ticket 11 Mobile - ${platform.name.toUpperCase()}`, () => {
+    test.use({ ...platform.options })
+
+    test(`renders Immich photo strip, Trip Links modal, and offline banner on ${platform.name}`, async ({ page }) => {
+      await mockOdysseusApi(page, { photosMode: 'available' })
+      await page.goto('/')
+
+      const mobile = page.getByTestId('mobile-workspace')
+      const strip = mobile.getByTestId('day-photo-strip').first()
+      await expect(strip).toBeVisible()
+      await expect(strip.locator('img')).toHaveCount(2)
+
+      await assertMinTouchHeight(mobile.getByRole('button', { name: 'Copy Markdown' }))
+      await assertMinTouchHeight(mobile.getByRole('button', { name: 'Download .md' }))
+      await assertMinTouchHeight(mobile.getByRole('button', { name: 'Trip Links' }))
+
+      await mobile.getByRole('button', { name: 'Trip Links' }).click()
+      const modal = page.getByTestId('trip-settings-modal')
+      await expect(modal).toBeVisible()
+      await assertMinTouchHeight(modal.getByRole('button', { name: 'Save Links' }))
+      await modal.getByRole('button', { name: 'Cancel' }).click()
+
+      await assertNoHorizontalOverflow(page)
+      await page.waitForTimeout(250)
+      await page.screenshot({ path: `screenshots/${platform.name}/11-immich-photos-export.png` })
+
+      await page.unrouteAll({ behavior: 'ignoreErrors' })
+      await mockOdysseusApi(page, { photosMode: 'offline' })
+      await page.goto('/')
+      await expect(mobile.getByTestId('immich-offline-banner')).toContainText('Immich offline (Muspelheim asleep)')
+      await assertMinTouchHeight(mobile.getByTestId('immich-offline-banner').getByRole('button', { name: 'Retry' }))
     })
   })
 }
