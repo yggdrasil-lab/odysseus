@@ -1,6 +1,6 @@
 """FastAPI application entrypoint for Odysseus API."""
 
-from fastapi import APIRouter, FastAPI, Request, status
+from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 
 from app.config import Settings, settings
@@ -15,6 +15,7 @@ from app.domain.errors import (
     DomainValidationError,
 )
 from app.domain.rate_limit import InMemoryRateLimiter
+from app.mcp_server import install_mcp
 from app.middleware import McpAuthMiddleware, NoCacheMiddleware, ShareSecurityHeadersMiddleware
 from app.routers import (
     attachments,
@@ -34,22 +35,6 @@ from app.routers import (
     sharing,
     trips,
 )
-
-mcp_router = APIRouter(prefix="/mcp", tags=["MCP"])
-
-
-@mcp_router.get("")
-@mcp_router.post("")
-def mcp_bootstrap_status() -> dict[str, str]:
-    """Bootstrap placeholder endpoint guarded by McpAuthMiddleware."""
-    return {"status": "ok", "service": "odysseus-mcp"}
-
-
-@mcp_router.get("/ping")
-def mcp_ping() -> dict[str, str]:
-    """Authenticated MCP connectivity check for sub-path validation."""
-    return {"status": "ok", "service": "odysseus-mcp"}
-
 
 def _register_domain_handlers(application: FastAPI) -> None:
     @application.exception_handler(DomainNotFoundError)
@@ -133,7 +118,7 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
     application.include_router(mappacks.router)
     application.include_router(sharing.author_router)
     application.include_router(sharing.public_router)
-    application.include_router(mcp_router)
+    install_mcp(application)
     application.add_middleware(
         McpAuthMiddleware,
         settings_provider=lambda: resolved_settings,

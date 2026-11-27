@@ -77,53 +77,77 @@ def test_health_returns_503_on_database_error() -> None:
     assert "Database connectivity check failed" in response.json()["detail"]
 
 
+MCP_HEADERS = {
+    "Accept": "application/json, text/event-stream",
+    "Content-Type": "application/json",
+}
+MCP_INIT_PAYLOAD = {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "initialize",
+    "params": {
+        "protocolVersion": "2025-06-18",
+        "capabilities": {},
+        "clientInfo": {"name": "odysseus-health-tests", "version": "0.1.0"},
+    },
+}
+
+
 def test_mcp_auth_fails_closed_when_unconfigured_outside_development() -> None:
     """Verify /mcp returns 503 outside development when no MCP token is configured."""
     prod_settings = Settings.model_construct(
         environment="production",
         mcp_token="",
     )
-    client = TestClient(create_app(prod_settings))
-    response = client.get("/mcp")
-    assert response.status_code == 503
-    assert response.headers["cache-control"] == "no-store, no-cache, must-revalidate, max-age=0"
+    with TestClient(create_app(prod_settings)) as client:
+        response = client.post("/mcp", json=MCP_INIT_PAYLOAD, headers=MCP_HEADERS)
+        assert response.status_code == 503
+        assert (
+            response.headers["cache-control"]
+            == "no-store, no-cache, must-revalidate, max-age=0"
+        )
 
 
 def test_mcp_auth_allows_passthrough_in_development_when_unconfigured() -> None:
     """Verify /mcp allows development passthrough only when environment is development."""
     dev_settings = Settings(environment="development", mcp_token="")
-    client = TestClient(create_app(dev_settings))
-    response = client.get("/mcp")
-    assert response.status_code == 200
-    assert response.json() == {"status": "ok", "service": "odysseus-mcp"}
+    with TestClient(create_app(dev_settings)) as client:
+        response = client.post("/mcp", json=MCP_INIT_PAYLOAD, headers=MCP_HEADERS)
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["result"]["serverInfo"]["name"] == "odysseus"
 
 
 def test_mcp_auth_rejects_missing_and_invalid_bearer_tokens() -> None:
     """Verify /mcp returns 401 with WWW-Authenticate on missing or wrong Bearer token."""
     configured = Settings(environment="development", mcp_token="synthetic-mcp-secret")
-    client = TestClient(create_app(configured))
+    with TestClient(create_app(configured)) as client:
+        missing = client.post("/mcp", json=MCP_INIT_PAYLOAD, headers=MCP_HEADERS)
+        assert missing.status_code == 401
+        assert missing.headers["www-authenticate"] == "Bearer"
 
-    missing = client.get("/mcp")
-    assert missing.status_code == 401
-    assert missing.headers["www-authenticate"] == "Bearer"
+        wrong_scheme = client.post(
+            "/mcp",
+            json=MCP_INIT_PAYLOAD,
+            headers={**MCP_HEADERS, "Authorization": "Basic abc123"},
+        )
+        assert wrong_scheme.status_code == 401
 
-    wrong_scheme = client.get("/mcp", headers={"Authorization": "Basic abc123"})
-    assert wrong_scheme.status_code == 401
-
-    wrong_token = client.get("/mcp/ping", headers={"Authorization": "Bearer wrong-token"})
-    assert wrong_token.status_code == 401
+        wrong_token = client.post(
+            "/mcp",
+            json=MCP_INIT_PAYLOAD,
+            headers={**MCP_HEADERS, "Authorization": "Bearer wrong-token"},
+        )
+        assert wrong_token.status_code == 401
 
 
 def test_mcp_auth_allows_valid_bearer_token() -> None:
-    """Verify /mcp and /mcp/* allow requests presenting the exact Bearer token."""
+    """Verify /mcp allows POST initialize presenting the exact Bearer token."""
     configured = Settings(environment="development", mcp_token="synthetic-mcp-secret")
-    client = TestClient(create_app(configured))
-    headers = {"Authorization": "Bearer synthetic-mcp-secret"}
-
-    root_response = client.post("/mcp", headers=headers)
-    assert root_response.status_code == 200
-    assert root_response.json() == {"status": "ok", "service": "odysseus-mcp"}
-
-    sub_response = client.get("/mcp/ping", headers=headers)
-    assert sub_response.status_code == 200
-    assert sub_response.json() == {"status": "ok", "service": "odysseus-mcp"}
+    with TestClient(create_app(configured)) as client:
+        headers = {**MCP_HEADERS, "Authorization": "Bearer synthetic-mcp-secret"}
+        response = client.post("/mcp", json=MCP_INIT_PAYLOAD, headers=headers)
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["result"]["protocolVersion"] == "2025-06-18"
+        assert payload["result"]["serverInfo"]["name"] == "odysseus"
