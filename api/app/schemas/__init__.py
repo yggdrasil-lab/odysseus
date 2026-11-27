@@ -10,6 +10,14 @@ from app.schemas.bookings import (
     BookingType,
     BookingUpdate,
 )
+from app.schemas.mappacks import (
+    MapPackCreate,
+    MapPackRead,
+    MapPackStatus,
+    OfflineBundleAttachmentManifest,
+    OfflineBundleMapPackManifest,
+    OfflineBundleRead,
+)
 from app.schemas.places import (
     DayRoutesComputeRequest,
     DayRoutesComputeResponse,
@@ -85,6 +93,12 @@ __all__ = [
     "LegCreate",
     "LegRead",
     "LegUpdate",
+    "MapPackCreate",
+    "MapPackRead",
+    "MapPackStatus",
+    "OfflineBundleAttachmentManifest",
+    "OfflineBundleMapPackManifest",
+    "OfflineBundleRead",
     "PlaceCategory",
     "PlaceCreate",
     "PlaceRead",
@@ -105,3 +119,5 @@ __all__ = [
     "TripUpdate",
     "TripWorkspaceRead",
 ]
+
+OfflineBundleRead.model_rebuild(_types_namespace={"TripWorkspaceRead": TripWorkspaceRead})

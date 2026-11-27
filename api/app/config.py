@@ -40,6 +40,14 @@ class Settings(BaseSettings):
         default="/var/cache/odysseus/mappacks",
         validation_alias=AliasChoices("ODYSSEUS_MAPPACKS_DIR", "MAPPACKS_DIR"),
     )
+    pmtiles_bin: str = Field(
+        default="pmtiles",
+        validation_alias=AliasChoices("ODYSSEUS_PMTILES_BIN", "PMTILES_BIN"),
+    )
+    pmtiles_source_url: str = Field(
+        default="",
+        validation_alias=AliasChoices("ODYSSEUS_PMTILES_SOURCE_URL", "PMTILES_SOURCE_URL"),
+    )
     mcp_token: str = ""
     mcp_token_file: str = ""
     integration_token: str = ""

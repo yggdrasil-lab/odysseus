@@ -8,8 +8,16 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      selfDestroying: true,
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
+      registerType: 'autoUpdate',
+      injectRegister: false,
       manifest: false,
+      injectManifest: {
+        globPatterns: ['**/*.{js,css,html,svg,png,woff2,mjs}'],
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+      },
     }),
   ],
   server: {

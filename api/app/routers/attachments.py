@@ -7,26 +7,12 @@ from fastapi import APIRouter, Depends, File, Form, Header, Response, UploadFile
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.domain.attachments import MAX_ATTACHMENT_BYTES, parse_byte_range
+from app.domain.attachments import MAX_ATTACHMENT_BYTES, etag_matches, parse_byte_range
 from app.domain.errors import DomainPayloadTooLargeError
 from app.schemas import AttachmentRead
 from app.services import attachment_service
 
 router = APIRouter(prefix="/trips/{trip_id}/attachments", tags=["Attachments"])
-
-
-def _etag_matches(if_none_match: str | None, sha256_hex: str) -> bool:
-    if not if_none_match:
-        return False
-    for raw_tag in if_none_match.split(","):
-        cleaned = raw_tag.strip()
-        if cleaned == "*":
-            return True
-        if cleaned.startswith("W/"):
-            cleaned = cleaned[2:].strip()
-        if cleaned.strip('"') == sha256_hex:
-            return True
-    return False
 
 
 def _content_headers(filename: str, sha256_hex: str) -> dict[str, str]:
@@ -83,7 +69,7 @@ def get_attachment_content(
     attachment = attachment_service.get_attachment_content(db, trip_id, attachment_id)
     headers = _content_headers(attachment.filename, attachment.sha256)
 
-    if _etag_matches(if_none_match, attachment.sha256):
+    if etag_matches(if_none_match, attachment.sha256):
         return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers=headers)
 
     payload = attachment.content_bytes

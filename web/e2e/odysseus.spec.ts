@@ -24,8 +24,39 @@ function buildSyntheticPdfBuffer(): Buffer {
   return Buffer.from(pdf, 'utf8')
 }
 
+function buildMinimalPmtilesBuffer(): Buffer {
+  const buf = Buffer.alloc(130)
+  Buffer.from('PMTiles\x03', 'ascii').copy(buf, 0)
+  buf.writeBigUInt64LE(127n, 8)
+  buf.writeBigUInt64LE(1n, 16)
+  buf.writeBigUInt64LE(128n, 24)
+  buf.writeBigUInt64LE(2n, 32)
+  buf.writeBigUInt64LE(130n, 40)
+  buf.writeBigUInt64LE(0n, 48)
+  buf.writeBigUInt64LE(130n, 56)
+  buf.writeBigUInt64LE(0n, 64)
+  buf[96] = 1
+  buf[97] = 1
+  buf[98] = 1
+  buf[99] = 1
+  buf[100] = 0
+  buf[101] = 12
+  buf.writeInt32LE(1740000000, 102)
+  buf.writeInt32LE(-370000000, 106)
+  buf.writeInt32LE(1750000000, 110)
+  buf.writeInt32LE(-360000000, 114)
+  buf[118] = 10
+  buf.writeInt32LE(1747600000, 119)
+  buf.writeInt32LE(-368400000, 123)
+  buf[127] = 0x00
+  buf[128] = 0x7b
+  buf[129] = 0x7d
+  return buf
+}
+
 async function mockOdysseusApi(page: Page) {
   const pdfBuffer = buildSyntheticPdfBuffer()
+  const pmtilesBuffer = buildMinimalPmtilesBuffer()
 
   const trip = {
     id: '11111111-1111-4111-8111-111111111111',
@@ -339,6 +370,27 @@ async function mockOdysseusApi(page: Page) {
     },
   ]
 
+  const mapPacks = [
+    {
+      id: 'dddddddd-dddd-4ddd-8ddd-dddddddddd01',
+      trip_id: trip.id,
+      leg_id: legs[0].id,
+      label: 'Harbor City Offline Map',
+      status: 'ready',
+      bbox_west: 174.0,
+      bbox_south: -37.0,
+      bbox_east: 175.0,
+      bbox_north: -36.0,
+      max_zoom: 12,
+      filename: 'harbor-city.pmtiles',
+      size_bytes: pmtilesBuffer.length,
+      sha256: 'syntheticpmtilessha256',
+      error_message: null,
+      created_at: '2027-01-01T00:00:00Z',
+      updated_at: '2027-01-01T00:00:00Z',
+    },
+  ]
+
   await page.route('https://tiles.openfreemap.org/**', async (route) => {
     await route.fulfill({
       status: 200,
@@ -373,6 +425,77 @@ async function mockOdysseusApi(page: Page) {
           attachments,
           places,
           route_estimates: routeEstimates,
+          map_packs: mapPacks,
+        },
+      })
+      return
+    }
+    if (path === `/trips/${trip.id}/mappacks` && req.method() === 'GET') {
+      await route.fulfill({ json: mapPacks })
+      return
+    }
+    if (path === `/trips/${trip.id}/mappacks` && req.method() === 'POST') {
+      await route.fulfill({ status: 201, json: mapPacks[0] })
+      return
+    }
+    if (path === `/trips/${trip.id}/mappacks/${mapPacks[0].id}/file` && req.method() === 'GET') {
+      await route.fulfill({
+        status: 200,
+        headers: {
+          'Content-Type': 'application/octet-stream',
+          ETag: `"${mapPacks[0].sha256}"`,
+          'Accept-Ranges': 'bytes',
+        },
+        body: pmtilesBuffer,
+      })
+      return
+    }
+    if (path === `/trips/${trip.id}/offline-bundle` && req.method() === 'GET') {
+      await route.fulfill({
+        json: {
+          bundle_version: 1,
+          generated_at: '2027-01-01T00:00:00Z',
+          workspace_sha256: 'syntheticworkspacesha256',
+          workspace: {
+            trip,
+            legs,
+            days,
+            itinerary_items: items,
+            checklists,
+            travel_notes: notes,
+            bookings,
+            attachments,
+            places,
+            route_estimates: routeEstimates,
+            map_packs: mapPacks,
+          },
+          attachments: [
+            {
+              id: attachments[0].id,
+              booking_id: attachments[0].booking_id,
+              filename: attachments[0].filename,
+              mime_type: attachments[0].mime_type,
+              size_bytes: attachments[0].size_bytes,
+              sha256: attachments[0].sha256,
+              content_url: `/api/trips/${trip.id}/attachments/${attachments[0].id}/content`,
+            },
+          ],
+          map_packs: [
+            {
+              id: mapPacks[0].id,
+              leg_id: mapPacks[0].leg_id,
+              label: mapPacks[0].label,
+              filename: mapPacks[0].filename,
+              size_bytes: mapPacks[0].size_bytes,
+              sha256: mapPacks[0].sha256,
+              max_zoom: mapPacks[0].max_zoom,
+              bbox_west: mapPacks[0].bbox_west,
+              bbox_south: mapPacks[0].bbox_south,
+              bbox_east: mapPacks[0].bbox_east,
+              bbox_north: mapPacks[0].bbox_north,
+              file_url: `/api/trips/${trip.id}/mappacks/${mapPacks[0].id}/file`,
+            },
+          ],
         },
       })
       return
@@ -532,6 +655,34 @@ test.describe('Desktop Visual Inspection - Wave 3 Bookings & MapLibre', () => {
     await expect(page.getByRole('heading', { name: 'Add Trip Place' })).toBeVisible()
     await page.waitForTimeout(300)
     await page.screenshot({ path: 'screenshots/desktop/03-place-modal.png' })
+    await page.getByRole('button', { name: 'Close dialog' }).click()
+
+    await page.getByRole('button', { name: 'Save Offline' }).click()
+    const syncModal = page.getByTestId('offline-sync-modal')
+    await expect(syncModal).toBeVisible()
+    const mappackCheckbox = syncModal.getByLabel('Include per-Leg .pmtiles MapPacks')
+    await expect(mappackCheckbox).toBeChecked()
+    await syncModal.getByRole('button', { name: 'Save Trip Offline' }).click()
+    await expect(syncModal.getByText('Saved Offline')).toBeVisible()
+    await expect(syncModal.getByText('2 files (1 docs, 1 maps)')).toBeVisible()
+    await page.waitForTimeout(250)
+    await page.screenshot({ path: 'screenshots/desktop/04-offline-sync-modal.png' })
+    await page.getByRole('button', { name: 'Close dialog' }).click()
+
+    await page.context().setOffline(true)
+    await expect(page.getByText('Offline Read-Only')).toBeVisible()
+    await expect(desktop.getByRole('button', { name: 'Add Activity' })).toBeDisabled()
+    await expect(desktop.getByRole('button', { name: 'Add Booking' })).toBeDisabled()
+    await expect(desktop.getByRole('button', { name: 'Add Place' })).toBeDisabled()
+    await expect(desktop.getByText('Offline PMTiles')).toBeVisible()
+    await expect(desktop.getByTestId('day-card-2027-01-13')).toContainText('Arrival: Pacific Air AKL to HND')
+
+    await desktop.getByRole('button', { name: 'View' }).first().click()
+    await expect(pdfModal).toBeVisible()
+    await expect(pdfModal.getByText('Page 1 / 1')).toBeVisible()
+    await page.getByRole('button', { name: 'Close dialog' }).click()
+    await page.waitForTimeout(250)
+    await page.screenshot({ path: 'screenshots/desktop/05-offline-readonly-split.png' })
   })
 })
 
@@ -580,6 +731,24 @@ for (const platform of MOBILE_PLATFORMS) {
         await assertNoHorizontalOverflow(page)
         await page.screenshot({ path: `screenshots/${platform.name}/05-lists.png`, fullPage: true })
       }
+
+      await page.getByRole('button', { name: 'Offline' }).click()
+      const syncModal = page.getByTestId('offline-sync-modal')
+      await expect(syncModal).toBeVisible()
+      await syncModal.getByRole('button', { name: 'Save Trip Offline' }).click()
+      await expect(syncModal.getByText('Saved Offline')).toBeVisible()
+      await page.getByRole('button', { name: 'Close dialog' }).click()
+
+      await page.context().setOffline(true)
+      await bottomNav.getByRole('button', { name: 'Itinerary' }).click()
+      await expect(page.getByText('Offline Read-Only')).toBeVisible()
+      await expect(mobile.getByRole('button', { name: 'Add Activity' })).toBeDisabled()
+      await assertNoHorizontalOverflow(page)
+      await page.screenshot({ path: `screenshots/${platform.name}/06-offline-readonly.png` })
+
+      await bottomNav.getByRole('button', { name: 'Map' }).click()
+      await expect(mobile.getByText('Offline PMTiles')).toBeVisible()
+      await assertNoHorizontalOverflow(page)
     })
   })
 }

@@ -16,6 +16,9 @@ import type {
   ItineraryItemUpdatePayload,
   Leg,
   LegCreatePayload,
+  MapPack,
+  MapPackCreatePayload,
+  OfflineBundle,
   Place,
   PlaceCreatePayload,
   PlaceSearchCandidate,
@@ -113,6 +116,11 @@ export interface OdysseusApiAdapter {
     routeId: string,
     payload: RouteEstimateUpdatePayload,
   ): Promise<RouteEstimate>
+  getOfflineBundle(tripId: string, signal?: AbortSignal): Promise<OfflineBundle>
+  listMapPacks(tripId: string, signal?: AbortSignal): Promise<MapPack[]>
+  createMapPack(tripId: string, payload: MapPackCreatePayload): Promise<MapPack>
+  deleteMapPack(tripId: string, packId: string): Promise<void>
+  mapPackFileUrl(tripId: string, packId: string): string
 }
 
 function isAuthentikGateResponse(response: Response): boolean {
@@ -393,6 +401,31 @@ export class OdysseusHttpAdapter implements OdysseusApiAdapter {
       method: 'PATCH',
       body: JSON.stringify(payload),
     })
+  }
+
+  getOfflineBundle(tripId: string, signal?: AbortSignal): Promise<OfflineBundle> {
+    return this.request<OfflineBundle>(`/trips/${tripId}/offline-bundle`, { signal })
+  }
+
+  listMapPacks(tripId: string, signal?: AbortSignal): Promise<MapPack[]> {
+    return this.request<MapPack[]>(`/trips/${tripId}/mappacks`, { signal })
+  }
+
+  createMapPack(tripId: string, payload: MapPackCreatePayload): Promise<MapPack> {
+    return this.request<MapPack>(`/trips/${tripId}/mappacks`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+  }
+
+  deleteMapPack(tripId: string, packId: string): Promise<void> {
+    return this.request<void>(`/trips/${tripId}/mappacks/${packId}`, {
+      method: 'DELETE',
+    })
+  }
+
+  mapPackFileUrl(tripId: string, packId: string): string {
+    return `${this.baseUrl}/trips/${tripId}/mappacks/${packId}/file`
   }
 }
 

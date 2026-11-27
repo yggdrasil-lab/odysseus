@@ -1,5 +1,6 @@
 import React from 'react'
 
+import type { OfflineSyncProgress } from '../offline/sync'
 import type {
   Attachment,
   Booking,
@@ -10,15 +11,20 @@ import type {
   ItineraryItemCreatePayload,
   Leg,
   LegCreatePayload,
+  MapPack,
+  MapPackCreatePayload,
+  OfflineSyncSummary,
   Place,
   PlaceCreatePayload,
   PlaceSearchCandidate,
   PlaceUpdatePayload,
   ResolvePlaceUrlResponse,
   TravelNoteCreatePayload,
+  Trip,
   TripCreatePayload,
 } from '../types'
 import { BookingModal } from './BookingModal'
+import { OfflineSyncModal } from './OfflineSyncModal'
 import { PdfViewerModal } from './PdfViewerModal'
 import { PlaceEntryModal } from './PlaceEntryModal'
 import {
@@ -56,6 +62,8 @@ interface WorkspaceModalsProps {
   onUpdateBooking: (bookingId: string, payload: BookingUpdatePayload) => Promise<void>
   viewingAttachment: Attachment | null
   attachmentContentUrl: string
+  isOffline: boolean
+  offlineBlobLoader: (attachmentId: string) => Promise<Blob | null>
   onCloseAttachmentViewer: () => void
   placeModalOpen: boolean
   editingPlace: Place | null
@@ -65,6 +73,18 @@ interface WorkspaceModalsProps {
   onResolvePlaceUrl: (url: string) => Promise<ResolvePlaceUrlResponse>
   onCreatePlace: (payload: PlaceCreatePayload) => Promise<void>
   onUpdatePlace: (placeId: string, payload: PlaceUpdatePayload) => Promise<void>
+  offlineModalOpen: boolean
+  onCloseOfflineModal: () => void
+  activeTrip: Trip | null
+  mapPacks: MapPack[]
+  offlineSummary: OfflineSyncSummary | null
+  syncProgress: OfflineSyncProgress | null
+  isSyncing: boolean
+  offlineError: string | null
+  onSaveOffline: (includeMapPacks: boolean) => Promise<void>
+  onClearOffline: () => Promise<void>
+  onCreateMapPack: (payload: MapPackCreatePayload) => Promise<void>
+  onDeleteMapPack: (packId: string) => Promise<void>
 }
 
 export const WorkspaceModals: React.FC<WorkspaceModalsProps> = (props) => (
@@ -93,6 +113,8 @@ export const WorkspaceModals: React.FC<WorkspaceModalsProps> = (props) => (
     <PdfViewerModal
       attachment={props.viewingAttachment}
       contentUrl={props.attachmentContentUrl}
+      isOffline={props.isOffline}
+      offlineBlobLoader={props.offlineBlobLoader}
       onClose={props.onCloseAttachmentViewer}
     />
     <PlaceEntryModal
@@ -105,5 +127,23 @@ export const WorkspaceModals: React.FC<WorkspaceModalsProps> = (props) => (
       onCreatePlace={props.onCreatePlace}
       onUpdatePlace={props.onUpdatePlace}
     />
+    {props.activeTrip && (
+      <OfflineSyncModal
+        isOpen={props.offlineModalOpen}
+        onClose={props.onCloseOfflineModal}
+        trip={props.activeTrip}
+        legs={props.legs}
+        mapPacks={props.mapPacks}
+        isOffline={props.isOffline}
+        offlineSummary={props.offlineSummary}
+        syncProgress={props.syncProgress}
+        isSyncing={props.isSyncing}
+        offlineError={props.offlineError}
+        onSaveOffline={props.onSaveOffline}
+        onClearOffline={props.onClearOffline}
+        onCreateMapPack={props.onCreateMapPack}
+        onDeleteMapPack={props.onDeleteMapPack}
+      />
+    )}
   </>
 )

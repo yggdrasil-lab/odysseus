@@ -11,9 +11,21 @@ if (pdfjsLib.GlobalWorkerOptions) {
   pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
 }
 
+let sharedPdfWorker: pdfjsLib.PDFWorker | null = null
+
+function getSharedPdfWorker(): pdfjsLib.PDFWorker | undefined {
+  if (typeof pdfjsLib.PDFWorker !== 'function') return undefined
+  if (!sharedPdfWorker) {
+    sharedPdfWorker = new pdfjsLib.PDFWorker()
+  }
+  return sharedPdfWorker
+}
+
 interface PdfViewerModalProps {
   attachment: Attachment | null
   contentUrl: string
+  isOffline?: boolean
+  offlineBlobLoader?: (attachmentId: string) => Promise<Blob | null>
   onClose: () => void
 }
 
@@ -25,39 +37,102 @@ async function fetchPdfBytes(contentUrl: string, signal: AbortSignal): Promise<A
   return response.arrayBuffer()
 }
 
-function usePdfDocumentLoader(attachment: Attachment | null, contentUrl: string, isPdf: boolean) {
+async function readBlobArrayBuffer(blob: Blob): Promise<ArrayBuffer> {
+  if (typeof blob.arrayBuffer === 'function') {
+    return blob.arrayBuffer()
+  }
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as ArrayBuffer)
+    reader.onerror = () => reject(reader.error ?? new Error('Unable to read cached attachment blob.'))
+    reader.readAsArrayBuffer(blob)
+  })
+}
+
+async function resolveAttachmentSource(options: {
+  attachment: Attachment
+  contentUrl: string
+  isPdf: boolean
+  isOffline: boolean
+  offlineBlobLoader?: (attachmentId: string) => Promise<Blob | null>
+  signal: AbortSignal
+}): Promise<{ buffer: ArrayBuffer | null; objectUrl: string | null }> {
+  const cachedBlob = options.offlineBlobLoader ? await options.offlineBlobLoader(options.attachment.id) : null
+  if (cachedBlob) {
+    const objectUrl = typeof URL.createObjectURL === 'function' ? URL.createObjectURL(cachedBlob) : null
+    const buffer = options.isPdf ? await readBlobArrayBuffer(cachedBlob) : null
+    return { buffer, objectUrl }
+  }
+  if (options.isOffline) {
+    throw new Error('Document is not cached for offline viewing. Reconnect to download it.')
+  }
+  const buffer = options.isPdf ? await fetchPdfBytes(options.contentUrl, options.signal) : null
+  return { buffer, objectUrl: null }
+}
+
+function usePdfDocumentLoader(options: {
+  attachment: Attachment | null
+  contentUrl: string
+  isPdf: boolean
+  isOffline: boolean
+  offlineBlobLoader?: (attachmentId: string) => Promise<Blob | null>
+}) {
+  const { attachment, contentUrl, isPdf, isOffline, offlineBlobLoader } = options
   const [pdfDoc, setPdfDoc] = useState<pdfjsLib.PDFDocumentProxy | null>(null)
   const [numPages, setNumPages] = useState(0)
   const [pageNumber, setPageNumber] = useState(1)
   const [loading, setLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [resolvedUrl, setResolvedUrl] = useState<string>(contentUrl)
 
   useEffect(() => {
-    if (!attachment || !isPdf || !contentUrl) {
-      setPdfDoc(null); setNumPages(0); setPageNumber(1); setErrorMessage(null)
+    if (!attachment || (!contentUrl && !offlineBlobLoader)) {
+      setPdfDoc(null); setNumPages(0); setPageNumber(1); setErrorMessage(null); setResolvedUrl(contentUrl)
       return
     }
     const controller = new AbortController()
     let active = true
-    setLoading(true); setErrorMessage(null); setPageNumber(1)
+    let createdObjectUrl: string | null = null
+    setLoading(true); setErrorMessage(null); setPageNumber(1); setResolvedUrl(contentUrl)
+
     void (async () => {
       try {
-        const bytes = await fetchPdfBytes(contentUrl, controller.signal)
-        const doc = await pdfjsLib.getDocument({ data: bytes }).promise
-        if (!active) { await doc.destroy(); return }
-        setPdfDoc(doc); setNumPages(doc.numPages)
+        const source = await resolveAttachmentSource({
+          attachment, contentUrl, isPdf, isOffline, offlineBlobLoader, signal: controller.signal,
+        })
+        if (!active) {
+          if (source.objectUrl && typeof URL.revokeObjectURL === 'function') URL.revokeObjectURL(source.objectUrl)
+          return
+        }
+        createdObjectUrl = source.objectUrl
+        if (source.objectUrl) setResolvedUrl(source.objectUrl)
+        if (isPdf && source.buffer) {
+          const worker = getSharedPdfWorker()
+          const doc = await pdfjsLib.getDocument(
+            worker ? { data: source.buffer, worker } : { data: source.buffer },
+          ).promise
+          if (!active) { await doc.destroy(); return }
+          setPdfDoc(doc); setNumPages(doc.numPages)
+        }
       } catch (err: unknown) {
         if (!controller.signal.aborted && active) {
-          setErrorMessage(err instanceof Error ? err.message : 'Unable to render PDF document.')
+          setErrorMessage(err instanceof Error ? err.message : 'Unable to render document.')
         }
       } finally {
         if (active) setLoading(false)
       }
     })()
-    return () => { active = false; controller.abort() }
-  }, [attachment, contentUrl, isPdf])
 
-  return { pdfDoc, numPages, pageNumber, setPageNumber, loading, errorMessage, setErrorMessage }
+    return () => {
+      active = false
+      controller.abort()
+      if (createdObjectUrl && typeof URL.revokeObjectURL === 'function') {
+        URL.revokeObjectURL(createdObjectUrl)
+      }
+    }
+  }, [attachment, contentUrl, isOffline, isPdf, offlineBlobLoader])
+
+  return { pdfDoc, numPages, pageNumber, setPageNumber, loading, errorMessage, setErrorMessage, resolvedUrl }
 }
 
 function usePdfPageCanvas(
@@ -97,11 +172,11 @@ const PdfToolbar: React.FC<{
   loading: boolean
   pageNumber: number
   numPages: number
-  contentUrl: string
+  downloadUrl: string
   filename: string
   onChangePage: (delta: number) => void
   onChangeScale: (delta: number) => void
-}> = ({ isPdf, loading, pageNumber, numPages, contentUrl, filename, onChangePage, onChangeScale }) => (
+}> = ({ isPdf, loading, pageNumber, numPages, downloadUrl, filename, onChangePage, onChangeScale }) => (
   <div className="flex flex-wrap items-center justify-between gap-2 rounded-ui-control bg-background/70 border border-border/80 px-3 py-2">
     {isPdf ? (
       <div className="flex flex-wrap items-center gap-1.5">
@@ -119,7 +194,7 @@ const PdfToolbar: React.FC<{
       <span className="text-xs text-muted">Inline image preview</span>
     )}
     <a
-      href={contentUrl}
+      href={downloadUrl}
       download={filename}
       className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-accent text-accent-fg text-xs font-semibold min-h-[44px] sm:min-h-[36px] hover:opacity-90 transition-opacity"
     >
@@ -129,11 +204,17 @@ const PdfToolbar: React.FC<{
   </div>
 )
 
-export const PdfViewerModal: React.FC<PdfViewerModalProps> = ({ attachment, contentUrl, onClose }) => {
+export const PdfViewerModal: React.FC<PdfViewerModalProps> = ({
+  attachment,
+  contentUrl,
+  isOffline = false,
+  offlineBlobLoader,
+  onClose,
+}) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const [scale, setScale] = useState(1.1)
   const isPdf = attachment?.mime_type === 'application/pdf'
-  const loader = usePdfDocumentLoader(attachment, contentUrl, isPdf)
+  const loader = usePdfDocumentLoader({ attachment, contentUrl, isPdf, isOffline, offlineBlobLoader })
   usePdfPageCanvas(loader.pdfDoc, loader.pageNumber, scale, canvasRef, loader.setErrorMessage)
 
   if (!attachment) return null
@@ -146,7 +227,7 @@ export const PdfViewerModal: React.FC<PdfViewerModalProps> = ({ attachment, cont
           loading={loader.loading}
           pageNumber={loader.pageNumber}
           numPages={loader.numPages}
-          contentUrl={contentUrl}
+          downloadUrl={loader.resolvedUrl}
           filename={attachment.filename}
           onChangePage={(d) => loader.setPageNumber((p) => Math.min(Math.max(1, p + d), loader.numPages || 1))}
           onChangeScale={(d) => setScale((s) => Math.min(2.2, Math.max(0.6, Number((s + d).toFixed(2)))))}
@@ -159,7 +240,7 @@ export const PdfViewerModal: React.FC<PdfViewerModalProps> = ({ attachment, cont
           </div>
         ) : (
           <div className="overflow-auto rounded-ui-control border border-border/80 bg-slate-950/80 p-3 flex justify-center">
-            <img src={contentUrl} alt={attachment.filename} className="max-w-full max-h-[60vh] object-contain rounded" />
+            <img src={loader.resolvedUrl} alt={attachment.filename} className="max-w-full max-h-[60vh] object-contain rounded" />
           </div>
         )}
       </div>

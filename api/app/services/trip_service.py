@@ -15,6 +15,7 @@ from app.models import (
     Day,
     ItineraryItem,
     Leg,
+    MapPack,
     Place,
     RouteEstimate,
     TravelNote,
@@ -113,7 +114,7 @@ def delete_trip(db: Session, trip_id: uuid.UUID) -> None:
 def _load_trip_logistics(
     db: Session,
     trip_id: uuid.UUID,
-) -> tuple[list[Booking], list[Attachment], list[Place], list[RouteEstimate]]:
+) -> tuple[list[Booking], list[Attachment], list[Place], list[RouteEstimate], list[MapPack]]:
     bookings = list(
         db.scalars(
             select(Booking)
@@ -142,7 +143,14 @@ def _load_trip_logistics(
             .order_by(RouteEstimate.created_at)
         )
     )
-    return bookings, attachments, places, route_estimates
+    map_packs = list(
+        db.scalars(
+            select(MapPack)
+            .where(MapPack.trip_id == trip_id)
+            .order_by(MapPack.created_at.desc())
+        )
+    )
+    return bookings, attachments, places, route_estimates, map_packs
 
 
 def get_trip_workspace(db: Session, trip_id: uuid.UUID) -> TripWorkspaceRead:
@@ -178,7 +186,9 @@ def get_trip_workspace(db: Session, trip_id: uuid.UUID) -> TripWorkspaceRead:
             .order_by(TravelNote.sort_order, TravelNote.created_at)
         )
     )
-    bookings, attachments, places, route_estimates = _load_trip_logistics(db, trip_id)
+    bookings, attachments, places, route_estimates, map_packs = _load_trip_logistics(
+        db, trip_id
+    )
     return TripWorkspaceRead.model_validate(
         {
             "trip": trip,
@@ -191,5 +201,6 @@ def get_trip_workspace(db: Session, trip_id: uuid.UUID) -> TripWorkspaceRead:
             "attachments": attachments,
             "places": places,
             "route_estimates": route_estimates,
+            "map_packs": map_packs,
         }
     )

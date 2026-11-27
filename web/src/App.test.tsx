@@ -21,6 +21,7 @@ vi.mock('pdfjs-dist', () => ({
 
 import { App } from './App'
 import { OdysseusApiError, type OdysseusApiAdapter } from './api/client'
+import { InMemoryOfflineStorageAdapter } from './offline/storage'
 import type {
   Attachment,
   Booking,
@@ -37,6 +38,9 @@ import type {
   ItineraryItemUpdatePayload,
   Leg,
   LegCreatePayload,
+  MapPack,
+  MapPackCreatePayload,
+  OfflineBundle,
   Place,
   PlaceCreatePayload,
   PlaceUpdatePayload,
@@ -450,12 +454,54 @@ function createSyntheticAdapter(initialFail?: Error): OdysseusApiAdapter {
       Object.assign(target, payload, { source: 'manual' })
       return { ...target }
     },
+    getOfflineBundle: async (): Promise<OfflineBundle> => ({
+      bundle_version: 1,
+      generated_at: '2027-01-01T00:00:00Z',
+      workspace_sha256: 'ws-sha',
+      workspace: {
+        trip,
+        legs: [...legs],
+        days: [...days],
+        itinerary_items: [...items],
+        checklists: checklists.map((c) => ({ ...c, items: [...c.items] })),
+        travel_notes: [...notes],
+        bookings: bookings.map((b) => ({ ...b, segments: [...b.segments] })),
+        attachments: [...attachments],
+        places: [...places],
+        route_estimates: [...routeEstimates],
+        map_packs: [],
+      },
+      attachments: [],
+      map_packs: [],
+    }),
+    listMapPacks: async (): Promise<MapPack[]> => [],
+    createMapPack: async (_tripId: string, payload: MapPackCreatePayload): Promise<MapPack> => ({
+      id: 'pack-1',
+      trip_id: trip.id,
+      leg_id: payload.leg_id ?? null,
+      label: payload.label ?? 'Harbor Pack',
+      status: 'ready',
+      bbox_west: 174.0,
+      bbox_south: -37.0,
+      bbox_east: 175.0,
+      bbox_north: -36.0,
+      max_zoom: payload.max_zoom ?? 14,
+      filename: 'harbor.pmtiles',
+      size_bytes: 130,
+      sha256: 'sha-pack',
+      error_message: null,
+      created_at: '',
+      updated_at: '',
+    }),
+    deleteMapPack: async () => {},
+    mapPackFileUrl: (tripId: string, packId: string) => `/api/trips/${tripId}/mappacks/${packId}/file`,
   }
 }
 
 beforeEach(() => {
   window.scrollTo = vi.fn()
   window.localStorage.clear()
+  Object.defineProperty(window.navigator, 'onLine', { configurable: true, value: true })
 })
 
 afterEach(() => {
@@ -466,7 +512,7 @@ afterEach(() => {
 describe('Odysseus Wave 3 Workspace Shell', () => {
   it('renders overlapping legs, projected +1 arrival card, bookings PNR, and map fallback', async () => {
     const adapter = createSyntheticAdapter()
-    render(<App adapter={adapter} />)
+    render(<App adapter={adapter} offlineStorage={new InMemoryOfflineStorageAdapter()} />)
 
     const headings = await screen.findAllByRole('heading', { name: 'Pacific Explorer' })
     expect(headings.length).toBeGreaterThan(0)
@@ -485,7 +531,7 @@ describe('Odysseus Wave 3 Workspace Shell', () => {
 
   it('toggles checklist item and adds new itinerary item via modal', async () => {
     const adapter = createSyntheticAdapter()
-    render(<App adapter={adapter} />)
+    render(<App adapter={adapter} offlineStorage={new InMemoryOfflineStorageAdapter()} />)
     await screen.findAllByRole('heading', { name: 'Pacific Explorer' })
 
     fireEvent.click(screen.getByRole('button', { name: 'Toggle Travel adapter' }))
@@ -504,7 +550,7 @@ describe('Odysseus Wave 3 Workspace Shell', () => {
   it('opens inline attachment viewer with download link and zero window.open calls', async () => {
     const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null)
     const adapter = createSyntheticAdapter()
-    render(<App adapter={adapter} />)
+    render(<App adapter={adapter} offlineStorage={new InMemoryOfflineStorageAdapter()} />)
     await screen.findAllByRole('heading', { name: 'Pacific Explorer' })
 
     fireEvent.click(screen.getAllByRole('button', { name: 'View' })[0])
@@ -517,7 +563,7 @@ describe('Odysseus Wave 3 Workspace Shell', () => {
 
   it('handles triple-path Place entry (Photon search + 422 Google URL fallback to manual pin)', async () => {
     const adapter = createSyntheticAdapter()
-    render(<App adapter={adapter} />)
+    render(<App adapter={adapter} offlineStorage={new InMemoryOfflineStorageAdapter()} />)
     await screen.findAllByRole('heading', { name: 'Pacific Explorer' })
 
     fireEvent.click(screen.getByRole('button', { name: 'Add Place' }))
@@ -545,7 +591,7 @@ describe('Odysseus Wave 3 Workspace Shell', () => {
 
   it('computes day routes showing OSRM fallback warning and overrides duration', async () => {
     const adapter = createSyntheticAdapter()
-    render(<App adapter={adapter} />)
+    render(<App adapter={adapter} offlineStorage={new InMemoryOfflineStorageAdapter()} />)
     await screen.findAllByRole('heading', { name: 'Pacific Explorer' })
 
     fireEvent.click(screen.getByRole('button', { name: 'Estimate Road Route' }))
@@ -565,7 +611,7 @@ describe('Odysseus Wave 3 Workspace Shell', () => {
     const adapter = createSyntheticAdapter(
       new OdysseusApiError({ status: 503, detail: 'Database offline', path: '/trips' }),
     )
-    render(<App adapter={adapter} />)
+    render(<App adapter={adapter} offlineStorage={new InMemoryOfflineStorageAdapter()} />)
 
     const alert = await screen.findByRole('alert')
     expect(alert).toHaveTextContent('Odysseus API Error')
@@ -581,7 +627,7 @@ describe('Odysseus Wave 3 Workspace Shell', () => {
         path: '/trips/trip-1/itinerary-items',
       })
     }
-    render(<App adapter={adapter} />)
+    render(<App adapter={adapter} offlineStorage={new InMemoryOfflineStorageAdapter()} />)
 
     await screen.findAllByRole('heading', { name: 'Pacific Explorer' })
     fireEvent.click(screen.getAllByRole('button', { name: 'Add Activity' })[0])
@@ -590,5 +636,90 @@ describe('Odysseus Wave 3 Workspace Shell', () => {
 
     expect(await screen.findByText('Invalid IANA timezone: Mars/Phobos')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Add Itinerary Item' })).toBeInTheDocument()
+  })
+
+  it('hydrates cached trip in Offline Read-Only mode and disables all mutation controls', async () => {
+    const adapter = createSyntheticAdapter()
+    const storage = new InMemoryOfflineStorageAdapter()
+    const workspace = await adapter.getWorkspace('trip-1')
+    await storage.putTripRecord({
+      tripId: 'trip-1',
+      syncedAt: '2027-01-10T10:00:00Z',
+      workspaceSha256: 'ws-sha',
+      workspace,
+      attachmentIds: ['att-1'],
+      mapPackIds: [],
+      totalBytes: 4096,
+      includesMapPacks: false,
+    })
+
+    Object.defineProperty(window.navigator, 'onLine', { configurable: true, value: false })
+    const listTripsSpy = vi.spyOn(adapter, 'listTrips')
+
+    render(<App adapter={adapter} offlineStorage={storage} />)
+
+    expect(await screen.findByText('Offline Read-Only')).toBeInTheDocument()
+    expect(listTripsSpy).not.toHaveBeenCalled()
+    expect((await screen.findAllByRole('heading', { name: 'Pacific Explorer' })).length).toBeGreaterThan(0)
+    expect(screen.getAllByRole('button', { name: 'Add Activity' })[0]).toBeDisabled()
+    expect(screen.getAllByRole('button', { name: 'Add Booking' })[0]).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Add Place' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Estimate Road Route' })).toBeDisabled()
+  })
+
+  it('renders cached attachment Blob offline via createObjectURL without network fetch', async () => {
+    const adapter = createSyntheticAdapter()
+    const storage = new InMemoryOfflineStorageAdapter()
+    const workspace = await adapter.getWorkspace('trip-1')
+    workspace.attachments = [
+      {
+        id: 'att-pdf',
+        trip_id: 'trip-1',
+        booking_id: 'book-1',
+        filename: 'offline-voucher.pdf',
+        mime_type: 'application/pdf',
+        size_bytes: 16,
+        sha256: 'sha-pdf',
+        extracted_text: null,
+        created_at: '',
+      },
+    ]
+    await storage.putTripRecord({
+      tripId: 'trip-1',
+      syncedAt: '2027-01-10T10:00:00Z',
+      workspaceSha256: 'ws-sha',
+      workspace,
+      attachmentIds: ['att-pdf'],
+      mapPackIds: [],
+      totalBytes: 16,
+      includesMapPacks: false,
+    })
+    await storage.putAttachmentBlob({
+      attachmentId: 'att-pdf',
+      tripId: 'trip-1',
+      sha256: 'sha-pdf',
+      filename: 'offline-voucher.pdf',
+      mimeType: 'application/pdf',
+      sizeBytes: 16,
+      blob: new Blob([new Uint8Array([0x25, 0x50, 0x44, 0x46])], { type: 'application/pdf' }),
+    })
+
+    Object.defineProperty(window.navigator, 'onLine', { configurable: true, value: false })
+    const createUrlSpy = vi.fn().mockReturnValue('blob:offline-pdf-url')
+    const revokeUrlSpy = vi.fn()
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createUrlSpy })
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: revokeUrlSpy })
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+
+    render(<App adapter={adapter} offlineStorage={storage} />)
+    await screen.findAllByRole('heading', { name: 'Pacific Explorer' })
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'View' })[0])
+    const modal = await screen.findByTestId('pdf-viewer-modal')
+    expect(modal).toBeInTheDocument()
+    await waitFor(() => {
+      expect(modal.querySelector('a[download="offline-voucher.pdf"]')).toHaveAttribute('href', 'blob:offline-pdf-url')
+    })
+    expect(fetchSpy).not.toHaveBeenCalled()
   })
 })

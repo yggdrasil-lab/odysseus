@@ -8,14 +8,17 @@ from app.adapters.geocoder import (
     ResolvedUrlPlace,
     UrlResolverAdapter,
 )
+from app.adapters.mappacks import MapPackBuilderAdapter, PmtilesCliAdapter
 from app.adapters.routing import OsrmRoutingAdapter, RoadRouteResult, RoutingAdapter
 
 __all__ = [
     "GeocoderAdapter",
     "GoogleUrlResolverAdapter",
+    "MapPackBuilderAdapter",
     "OsrmRoutingAdapter",
     "PhotonGeocoderAdapter",
     "PlaceSearchCandidate",
+    "PmtilesCliAdapter",
     "ResolvedUrlPlace",
     "RoadRouteResult",
     "RoutingAdapter",

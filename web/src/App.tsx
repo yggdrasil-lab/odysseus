@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { CalendarDays, CheckSquare, Compass, Map as MapIcon, Plus, Ticket, Wallet } from 'lucide-react'
+import { CalendarDays, CheckSquare, Compass, DownloadCloud, HardDriveDownload, Map as MapIcon, Plus, Ticket, Wallet, WifiOff } from 'lucide-react'
 import {
   AlertBanner,
   AppHeader,
@@ -12,12 +12,15 @@ import {
 
 import { OdysseusHttpAdapter, type OdysseusApiAdapter } from './api/client'
 import { WorkspaceViews } from './WorkspaceViews'
+import { IosInstallBanner } from './components/IosInstallBanner'
 import { WorkspaceModals } from './components/WorkspaceModals'
 import { useOdysseusWorkspace, type WorkspaceErrorState } from './hooks/useOdysseusWorkspace'
+import type { OfflineStorageAdapter } from './offline/storage'
 import type { Attachment, Booking, MapScope, MobileTab, Place } from './types'
 
 export interface AppProps {
   adapter?: OdysseusApiAdapter
+  offlineStorage?: OfflineStorageAdapter
 }
 
 const MOBILE_TABS = [
@@ -54,6 +57,7 @@ function useShellUiState() {
   const [placeModalOpen, setPlaceModalOpen] = useState(false)
   const [editingPlace, setEditingPlace] = useState<Place | null>(null)
   const [initialPlaceCoords, setInitialPlaceCoords] = useState<{ lat: number; lng: number } | null>(null)
+  const [offlineModalOpen, setOfflineModalOpen] = useState(false)
 
   return {
     mobileTab, setMobileTab, mapScope, setMapScope, mapLegId, setMapLegId, mapDayId, setMapDayId,
@@ -62,6 +66,7 @@ function useShellUiState() {
     bookingModalOpen, setBookingModalOpen, editingBooking, setEditingBooking,
     viewingAttachment, setViewingAttachment, placeModalOpen, setPlaceModalOpen,
     editingPlace, setEditingPlace, initialPlaceCoords, setInitialPlaceCoords,
+    offlineModalOpen, setOfflineModalOpen,
   }
 }
 
@@ -83,20 +88,28 @@ const AppModalsHost: React.FC<{
       onCloseBookingModal={() => { ui.setBookingModalOpen(false); ui.setEditingBooking(null) }}
       onCreateBooking={state.createBooking} onUpdateBooking={state.updateBooking}
       viewingAttachment={ui.viewingAttachment} attachmentContentUrl={ui.viewingAttachment ? state.attachmentContentUrl(ui.viewingAttachment.id) : ''}
+      isOffline={state.isOffline} offlineBlobLoader={state.loadOfflineAttachmentBlob}
       onCloseAttachmentViewer={() => ui.setViewingAttachment(null)}
       placeModalOpen={ui.placeModalOpen} editingPlace={ui.editingPlace} initialPlaceCoords={ui.initialPlaceCoords}
       onClosePlaceModal={() => { ui.setPlaceModalOpen(false); ui.setEditingPlace(null); ui.setInitialPlaceCoords(null) }}
       onSearchPlaces={state.searchPlaces} onResolvePlaceUrl={state.resolvePlaceUrl}
       onCreatePlace={state.createPlace} onUpdatePlace={state.updatePlace}
+      offlineModalOpen={ui.offlineModalOpen} onCloseOfflineModal={() => ui.setOfflineModalOpen(false)}
+      activeTrip={workspace?.trip ?? null} mapPacks={workspace?.map_packs ?? []}
+      offlineSummary={state.offlineSummary} syncProgress={state.syncProgress}
+      isSyncing={state.isSyncing} offlineError={state.offlineError}
+      onSaveOffline={state.saveTripOffline} onClearOffline={state.clearTripOffline}
+      onCreateMapPack={state.createMapPack} onDeleteMapPack={state.deleteMapPack}
     />
   )
 }
 
-export function App({ adapter }: AppProps) {
+export function App({ adapter, offlineStorage }: AppProps) {
   const resolvedAdapter = useMemo(() => adapter ?? new OdysseusHttpAdapter(), [adapter])
-  const state = useOdysseusWorkspace(resolvedAdapter)
+  const state = useOdysseusWorkspace(resolvedAdapter, offlineStorage)
   const ui = useShellUiState()
   const workspace = state.workspace
+  const isSavedOffline = Boolean(state.offlineSummary)
 
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground pb-24 lg:pb-8">
@@ -104,9 +117,34 @@ export function App({ adapter }: AppProps) {
         variant="brand" brandIcon={<Compass className="w-4 h-4" />} title="Odysseus"
         subtitle={workspace ? workspace.trip.title : 'Aegean Travel Planner'}
         isRefreshing={state.isRefreshing} onRefresh={() => void state.refresh()}
-        actions={<Button variant="brand" size="sm" className="min-h-[38px]" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => ui.setTripModalOpen(true)}>New Trip</Button>}
+        actions={
+          <div className="flex items-center gap-1.5">
+            {workspace && (
+              <Button
+                variant={isSavedOffline ? 'secondary' : 'outline'}
+                size="sm"
+                className="min-h-[38px]"
+                icon={isSavedOffline ? <HardDriveDownload className="w-3.5 h-3.5 text-emerald-400" /> : <DownloadCloud className="w-3.5 h-3.5" />}
+                onClick={() => ui.setOfflineModalOpen(true)}
+              >
+                <span className="hidden sm:inline">{isSavedOffline ? 'Saved Offline' : 'Save Offline'}</span>
+                <span className="sm:hidden">{isSavedOffline ? 'Saved' : 'Offline'}</span>
+              </Button>
+            )}
+            <Button variant="brand" size="sm" disabled={state.isOffline} className="min-h-[38px]" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => ui.setTripModalOpen(true)}>
+              <span className="hidden sm:inline">New Trip</span>
+              <span className="sm:hidden">New</span>
+            </Button>
+          </div>
+        }
       />
       <main className="flex-1 w-full max-w-[1440px] mx-auto px-3 sm:px-6 lg:px-8 pt-4 space-y-4">
+        {state.isOffline && (
+          <AlertBanner variant="warning" title="Offline Read-Only" icon={<WifiOff className="w-4 h-4 text-amber-300" />}>
+            Viewing cached trip data. Editing, uploads, and route calculations are paused until you reconnect.
+          </AlertBanner>
+        )}
+        <IosInstallBanner />
         <WorkspaceErrorDisplay error={state.loadError ?? state.actionError} onRetry={() => void state.refresh()} />
         {state.isLoading && <LoadingState label="Loading trip workspace..." variant="brand" />}
         {!state.isLoading && !workspace && !state.loadError && (
@@ -114,7 +152,7 @@ export function App({ adapter }: AppProps) {
             title="Plan your first voyage"
             description="Create a trip with flexible planning dates or locked travel dates to begin building legs, days, and checklists."
             icon={<Compass className="w-8 h-8 text-accent" />}
-            action={<Button variant="brand" size="md" onClick={() => ui.setTripModalOpen(true)}>Create First Trip</Button>}
+            action={<Button variant="brand" size="md" disabled={state.isOffline} onClick={() => ui.setTripModalOpen(true)}>Create First Trip</Button>}
           />
         )}
         {workspace && (
