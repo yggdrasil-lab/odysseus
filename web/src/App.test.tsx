@@ -54,7 +54,9 @@ import type {
   TravelNote,
   TravelNoteCreatePayload,
   Trip,
+  TripBudgetSummary,
   TripCreatePayload,
+  TripUpdatePayload,
   TripWorkspace,
 } from './types'
 
@@ -326,6 +328,12 @@ function createSyntheticAdapter(initialFail?: Error): OdysseusApiAdapter {
       trips.unshift(created)
       return created
     },
+    updateTrip: async (_tripId: string, payload: TripUpdatePayload) => {
+      if (payload.budget_nzd !== undefined) {
+        trip.budget_nzd = payload.budget_nzd === null ? null : String(payload.budget_nzd)
+      }
+      return { ...trip }
+    },
     getWorkspace: async (): Promise<TripWorkspace> => ({
       trip,
       legs: [...legs],
@@ -337,6 +345,51 @@ function createSyntheticAdapter(initialFail?: Error): OdysseusApiAdapter {
       attachments: [...attachments],
       places: [...places],
       route_estimates: [...routeEstimates],
+    }),
+    getTripBudget: async (): Promise<TripBudgetSummary> => ({
+      trip_id: trip.id,
+      trip_slug: trip.slug,
+      plutus_tag: `trip:${trip.slug}`,
+      budget_nzd: trip.budget_nzd,
+      planned_nzd: '1480.00',
+      actual_settled_nzd: '920.50',
+      remaining_budget_nzd: '3579.50',
+      variance_nzd: '-559.50',
+      plutus_available: true,
+      plutus_error: null,
+      midas_url: `https://midas.example.test/?tag=trip:${trip.slug}`,
+      missing_fx_currencies: [],
+      fx_rates: {},
+      planned_bookings: [
+        {
+          booking_id: 'book-1',
+          title: 'Pacific Air AKL to HND',
+          booking_type: 'flight',
+          status: 'confirmed',
+          quoted_cost: '1480.00',
+          quoted_currency: 'NZD',
+          fx_rate: '1.0',
+          nzd_amount: '1480.00',
+        },
+      ],
+      category_breakdown: [
+        { category: 'Transport', total_spend_nzd: '920.50', transaction_count: 1, percentage: '100.0' },
+      ],
+      transactions: [
+        {
+          id: 1,
+          transaction_date: '2027-01-12',
+          account_name: 'Travel Card',
+          amount: '920.50',
+          currency: 'NZD',
+          exchange_rate: '1.0',
+          nzd_amount: '920.50',
+          merchant: 'Pacific Air',
+          category: 'Transport',
+          raw_description: 'PACIFIC AIR',
+          tags: [`trip:${trip.slug}`],
+        },
+      ],
     }),
     createLeg: async (_tripId: string, payload: LegCreatePayload) => {
       const created: Leg = { id: `leg-${legs.length + 1}`, trip_id: trip.id, name: payload.name, primary_city: payload.primary_city, country_code: payload.country_code ?? null, base_timezone: payload.base_timezone, start_date: payload.start_date, end_date: payload.end_date, color: payload.color ?? '#38bdf8', sort_order: legs.length, notes: null, created_at: '', updated_at: '' }

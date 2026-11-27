@@ -5,6 +5,7 @@ import { BrowserOfflineStorageAdapter, type OfflineStorageAdapter } from '../off
 import type { DayRoutesComputeResponse, TravelMode, Trip, TripWorkspace } from '../types'
 import { useOfflineTripSync } from './useOfflineTripSync'
 import { useShareTokens } from './useShareTokens'
+import { useTripBudget } from './useTripBudget'
 import { buildWorkspaceActions } from './workspaceActions'
 
 export interface WorkspaceErrorState {
@@ -67,6 +68,7 @@ function useWorkspaceQueries(adapter: OdysseusApiAdapter, storage: OfflineStorag
   const [trips, setTrips] = useState<Trip[]>([])
   const [selectedTripId, setSelectedTripId] = useState<string | null>(null)
   const [workspace, setWorkspace] = useState<TripWorkspace | null>(null)
+  const [workspaceVersion, setWorkspaceVersion] = useState<number>(0)
   const [isLoading, setIsLoading] = useState<boolean>(true)
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false)
   const [loadError, setLoadError] = useState<WorkspaceErrorState | null>(null)
@@ -76,7 +78,7 @@ function useWorkspaceQueries(adapter: OdysseusApiAdapter, storage: OfflineStorag
       const cached = await hydrateFromStorage(storage, preferredTripId)
       if (!cached) return false
       setTrips(cached.trips); setSelectedTripId(cached.selectedTripId)
-      setWorkspace(cached.workspace); setLoadError(null)
+      setWorkspace(cached.workspace); setWorkspaceVersion((v) => v + 1); setLoadError(null)
       return true
     },
     [storage],
@@ -94,7 +96,8 @@ function useWorkspaceQueries(adapter: OdysseusApiAdapter, storage: OfflineStorag
         }
         const loaded = await fetchInitialWorkspace(adapter, signal)
         if (loaded) {
-          setTrips(loaded.trips); setSelectedTripId(loaded.selectedTripId); setWorkspace(loaded.workspace)
+          setTrips(loaded.trips); setSelectedTripId(loaded.selectedTripId)
+          setWorkspace(loaded.workspace); setWorkspaceVersion((v) => v + 1)
         }
       } catch (err: unknown) {
         if (signal?.aborted || (readNavigatorOffline() && (await applyOfflineFallback()))) return
@@ -115,7 +118,7 @@ function useWorkspaceQueries(adapter: OdysseusApiAdapter, storage: OfflineStorag
           return
         }
         const [tripList, loaded] = await Promise.all([adapter.listTrips(), adapter.getWorkspace(tripId)])
-        setTrips(tripList); setWorkspace(loaded)
+        setTrips(tripList); setWorkspace(loaded); setWorkspaceVersion((v) => v + 1)
       } catch (err: unknown) {
         if (readNavigatorOffline() && (await applyOfflineFallback(tripId))) return
         setLoadError(classifyError(err))
@@ -126,7 +129,10 @@ function useWorkspaceQueries(adapter: OdysseusApiAdapter, storage: OfflineStorag
     [adapter, applyOfflineFallback],
   )
 
-  return { trips, selectedTripId, setSelectedTripId, workspace, isLoading, isRefreshing, loadError, hydrateTrips, reloadWorkspace }
+  return {
+    trips, selectedTripId, setSelectedTripId, workspace, workspaceVersion,
+    isLoading, isRefreshing, loadError, hydrateTrips, reloadWorkspace,
+  }
 }
 
 function useWave3WorkspaceQueries(options: {
@@ -249,6 +255,7 @@ export function useOdysseusWorkspace(adapter: OdysseusApiAdapter, storage?: Offl
   const shareTokens = useShareTokens({
     adapter, selectedTripId: queries.selectedTripId, isOffline,
   })
+  const budget = useTripBudget(adapter, queries.selectedTripId, isOffline, queries.workspaceVersion)
 
   const selectTrip = useCallback(
     async (tripId: string) => { queries.setSelectedTripId(tripId); setActionError(null); await queries.reloadWorkspace(tripId) },
@@ -263,6 +270,7 @@ export function useOdysseusWorkspace(adapter: OdysseusApiAdapter, storage?: Offl
     trips: queries.trips, selectedTripId: queries.selectedTripId, workspace: queries.workspace,
     isLoading: queries.isLoading, isRefreshing: queries.isRefreshing, loadError: queries.loadError,
     actionError, isOffline, clearActionError: () => setActionError(null), selectTrip, refresh,
+    budgetSummary: budget.budgetSummary, budgetLoading: budget.isLoading, budgetError: budget.budgetError, refreshBudget: budget.refreshBudget,
     ...wave3, ...mutations, ...offline, ...shareTokens,
   }
 }

@@ -33,6 +33,8 @@ function buildCoreActions({ adapter, runMutation, onTripCreated, onActionError }
         throw err
       }
     },
+    updateTripBudget: (budgetNzd: string | null) =>
+      runMutation((id) => adapter.updateTrip(id, { budget_nzd: budgetNzd }).then(() => undefined)),
     createLeg: (payload: LegCreatePayload) => runMutation((id) => adapter.createLeg(id, payload).then(() => undefined)),
     createItem: (payload: ItineraryItemCreatePayload) => runMutation((id) => adapter.createItineraryItem(id, payload).then(() => undefined)),
     updateItem: (itemId: string, payload: ItineraryItemUpdatePayload) => runMutation((id) => adapter.updateItineraryItem(id, itemId, payload).then(() => undefined)),

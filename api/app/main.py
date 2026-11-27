@@ -19,6 +19,7 @@ from app.middleware import McpAuthMiddleware, NoCacheMiddleware, ShareSecurityHe
 from app.routers import (
     attachments,
     bookings,
+    budget,
     checklists,
     health,
     itinerary,
@@ -117,6 +118,7 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
     application.include_router(checklists.router)
     application.include_router(notes.router)
     application.include_router(bookings.router)
+    application.include_router(budget.router)
     application.include_router(attachments.router)
     application.include_router(places.router)
     application.include_router(routes.router)

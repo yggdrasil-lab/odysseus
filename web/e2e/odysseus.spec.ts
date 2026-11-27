@@ -531,6 +531,88 @@ async function mockOdysseusApi(page: Page, onApiRequest?: (path: string) => void
       await route.fulfill({ json: [trip] })
       return
     }
+    if (path === `/trips/${trip.id}` && req.method() === 'PATCH') {
+      const body = req.postDataJSON() as Record<string, unknown>
+      if ('budget_nzd' in body) {
+        trip.budget_nzd = body.budget_nzd === null ? null : String(body.budget_nzd)
+      }
+      await route.fulfill({ json: trip })
+      return
+    }
+    if (/^\/trips\/[^/]+\/budget$/.test(path) && req.method() === 'GET') {
+      await route.fulfill({
+        json: {
+          trip_id: trip.id,
+          trip_slug: trip.slug,
+          plutus_tag: `trip:${trip.slug}`,
+          budget_nzd: trip.budget_nzd,
+          planned_nzd: '2600.50',
+          actual_settled_nzd: '2150.40',
+          remaining_budget_nzd: '2049.60',
+          variance_nzd: '-450.10',
+          plutus_available: true,
+          plutus_error: null,
+          midas_url: `https://midas.example.test/?tag=trip:${trip.slug}`,
+          missing_fx_currencies: [],
+          fx_rates: {
+            SGD: { rate: '1.2500', rate_date: '2027-01-10', source: 'plutus' },
+            PHP: { rate: '0.0300', rate_date: '2027-01-10', source: 'plutus' },
+          },
+          planned_bookings: [
+            {
+              booking_id: bookings[0].id,
+              title: 'Pacific Air AKL to HND',
+              booking_type: 'flight',
+              status: 'confirmed',
+              quoted_cost: '1525.50',
+              quoted_currency: 'NZD',
+              fx_rate: '1.0',
+              nzd_amount: '1525.50',
+            },
+            {
+              booking_id: bookings[1].id,
+              title: 'Harbour View Hotel Stay',
+              booking_type: 'lodging',
+              status: 'confirmed',
+              quoted_cost: '500.00',
+              quoted_currency: 'SGD',
+              fx_rate: '1.2500',
+              nzd_amount: '625.00',
+            },
+            {
+              booking_id: '99999999-9999-4999-8999-999999999903',
+              title: 'Island Express Ferry',
+              booking_type: 'transport',
+              status: 'pending',
+              quoted_cost: '15000.00',
+              quoted_currency: 'PHP',
+              fx_rate: '0.0300',
+              nzd_amount: '450.00',
+            },
+          ],
+          category_breakdown: [
+            { category: 'Transport', total_spend_nzd: '1525.40', transaction_count: 2, percentage: '70.9' },
+            { category: 'Lodging', total_spend_nzd: '625.00', transaction_count: 1, percentage: '29.1' },
+          ],
+          transactions: [
+            {
+              id: 501,
+              transaction_date: '2027-01-12',
+              account_name: 'Wise Travel',
+              amount: '500.00',
+              currency: 'SGD',
+              exchange_rate: '1.2500',
+              nzd_amount: '625.00',
+              merchant: 'Harbour View SG',
+              category: 'Lodging',
+              raw_description: 'HARBOUR VIEW SG',
+              tags: [`trip:${trip.slug}`],
+            },
+          ],
+        },
+      })
+      return
+    }
     if (path === `/trips/${trip.id}/workspace` && req.method() === 'GET') {
       await route.fulfill({
         json: {
@@ -813,6 +895,20 @@ test.describe('Desktop Visual Inspection - Wave 3 Bookings & MapLibre', () => {
     await page.screenshot({ path: 'screenshots/desktop/04-offline-sync-modal.png' })
     await page.getByRole('button', { name: 'Close dialog' }).click()
 
+    const budgetSection = desktop.getByTestId('budget-section')
+    await budgetSection.scrollIntoViewIfNeeded()
+    await expect(budgetSection.getByTestId('budget-planned-card')).toContainText('NZD 2600.50')
+    await expect(budgetSection.getByTestId('budget-actual-card')).toContainText('NZD 2150.40')
+    await expect(budgetSection.getByRole('link', { name: /Open in Midas/i })).toHaveAttribute(
+      'href',
+      'https://midas.example.test/?tag=trip:pacific-explorer',
+    )
+    await expect(budgetSection).toContainText('SGD 500.00')
+    await expect(budgetSection).toContainText('PHP 15000.00')
+    await assertNoHorizontalOverflow(page)
+    await page.waitForTimeout(250)
+    await page.screenshot({ path: 'screenshots/desktop/08-budget.png' })
+
     await page.context().setOffline(true)
     await expect(page.getByText('Offline Read-Only')).toBeVisible()
     await expect(desktop.getByRole('button', { name: 'Add Activity' })).toBeDisabled()
@@ -898,6 +994,22 @@ for (const platform of MOBILE_PLATFORMS) {
         await assertNoHorizontalOverflow(page)
         await page.screenshot({ path: `screenshots/${platform.name}/05-lists.png`, fullPage: true })
       }
+
+      await bottomNav.getByRole('button', { name: 'Budget' }).click()
+      const mobileBudget = mobile.getByTestId('budget-section')
+      await expect(mobileBudget).toBeVisible()
+      await expect(mobileBudget.getByTestId('budget-planned-card')).toContainText('NZD 2600.50')
+      await expect(mobileBudget.getByTestId('budget-actual-card')).toContainText('NZD 2150.40')
+      await expect(mobileBudget.getByRole('link', { name: /Open in Midas/i })).toHaveAttribute(
+        'href',
+        'https://midas.example.test/?tag=trip:pacific-explorer',
+      )
+      await assertMinTouchHeight(mobileBudget.getByRole('link', { name: /Open in Midas/i }))
+      await assertMinTouchHeight(mobileBudget.getByRole('button', { name: 'Refresh' }))
+      await assertMinTouchHeight(mobileBudget.getByRole('button', { name: 'Edit Budget' }))
+      await assertNoHorizontalOverflow(page)
+      await page.waitForTimeout(250)
+      await page.screenshot({ path: `screenshots/${platform.name}/08-budget.png`, fullPage: true })
 
       await page.locator('header').first().getByRole('button', { name: 'Save Offline' }).click()
       const syncModal = page.getByTestId('offline-sync-modal')
