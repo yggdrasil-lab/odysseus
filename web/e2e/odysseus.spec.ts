@@ -613,6 +613,53 @@ async function mockOdysseusApi(page: Page, onApiRequest?: (path: string) => void
       })
       return
     }
+    if (path === `/trips/${trip.id}/chronos/preview` && req.method() === 'GET') {
+      await route.fulfill({
+        json: {
+          trip_id: trip.id,
+          trip_slug: trip.slug,
+          eligible: true,
+          ineligible_reason: null,
+          sync_enabled: trip.chronos_sync_enabled,
+          overlay_mode: trip.chronos_overlay_mode,
+          confirmed_segment_count: 1,
+          synced_item_count: items.filter((i) => i.sync_to_chronos).length,
+          anchors: [
+            {
+              external_ref: `odysseus:${trip.slug}:segment:${bookings[0].segments[0].id}`,
+              source_kind: 'booking_segment',
+              source_id: bookings[0].segments[0].id,
+              title: 'Pacific Air AKL to HND: AKL to HND',
+              target_date: '2027-01-13',
+              start_minute: 480,
+              end_minute: 1125,
+              nudge_mode: 'boundary',
+              urgent_quiet_bypass: true,
+              notes: 'Departs 2027-01-13 08:00 (Pacific/Auckland) | Confirmation: ODYS99',
+            },
+          ],
+        },
+      })
+      return
+    }
+    if (path === `/trips/${trip.id}/chronos/sync` && req.method() === 'POST') {
+      const body = req.postDataJSON() as Record<string, unknown>
+      if (typeof body.enabled === 'boolean') trip.chronos_sync_enabled = body.enabled
+      if (typeof body.overlay_mode === 'string') trip.chronos_overlay_mode = body.overlay_mode
+      await route.fulfill({
+        json: {
+          trip_id: trip.id,
+          trip_slug: trip.slug,
+          sync_enabled: trip.chronos_sync_enabled,
+          overlay_mode: trip.chronos_overlay_mode,
+          overlay_active: trip.chronos_sync_enabled,
+          upserted_count: trip.chronos_sync_enabled ? 1 : 0,
+          deleted_count: 0,
+          anchors: [],
+        },
+      })
+      return
+    }
     if (path === `/trips/${trip.id}/workspace` && req.method() === 'GET') {
       await route.fulfill({
         json: {
@@ -883,6 +930,17 @@ test.describe('Desktop Visual Inspection - Wave 3 Bookings & MapLibre', () => {
     await page.screenshot({ path: 'screenshots/desktop/06-share-modal.png' })
     await page.getByRole('button', { name: 'Close dialog' }).click()
 
+    await desktop.getByTestId('chronos-status-pill').click()
+    const chronosModal = page.getByTestId('chronos-sync-modal')
+    await expect(chronosModal).toBeVisible()
+    await expect(chronosModal.getByText('Pacific Air AKL to HND: AKL to HND')).toBeVisible()
+    await chronosModal.getByRole('button', { name: 'Sync to Chronos' }).click()
+    await expect(chronosModal.getByText('Chronos Sync Complete')).toBeVisible()
+    await page.waitForTimeout(250)
+    await page.screenshot({ path: 'screenshots/desktop/09-chronos-sync-modal.png' })
+    await page.getByRole('button', { name: 'Close dialog' }).click()
+    await expect(desktop.getByTestId('chronos-status-pill')).toContainText('Chronos: Active')
+
     await header.getByRole('button', { name: 'Save Offline' }).click()
     const syncModal = page.getByTestId('offline-sync-modal')
     await expect(syncModal).toBeVisible()
@@ -965,6 +1023,16 @@ for (const platform of MOBILE_PLATFORMS) {
       await assertHeaderFitsViewport(page)
       await assertMinTouchHeight(mobile.getByRole('button', { name: 'Add Activity' }))
       await page.screenshot({ path: `screenshots/${platform.name}/01-itinerary.png`, fullPage: true })
+
+      await mobile.getByTestId('chronos-status-pill').click()
+      const chronosModal = page.getByTestId('chronos-sync-modal')
+      await expect(chronosModal).toBeVisible()
+      await expect(chronosModal.getByText('Pacific Air AKL to HND: AKL to HND')).toBeVisible()
+      await assertMinTouchHeight(chronosModal.getByRole('button', { name: 'Sync to Chronos' }))
+      await assertNoHorizontalOverflow(page)
+      await page.waitForTimeout(250)
+      await page.screenshot({ path: `screenshots/${platform.name}/09-chronos-sync-modal.png` })
+      await page.getByRole('button', { name: 'Close dialog' }).click()
 
       await bottomNav.getByRole('button', { name: 'Map' }).click()
       await expect(mobile.getByTestId('map-preview-panel')).toBeVisible()

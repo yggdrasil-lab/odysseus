@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, defer, selectinload
 
+from app.domain.chronos import validate_chronos_sync_eligibility
 from app.domain.errors import DomainConflictError
 from app.domain.timezones import validate_iana_timezone, validate_slug, validate_trip_dates
 from app.models import (
@@ -45,6 +46,8 @@ def create_trip(db: Session, payload: TripCreate) -> Trip:
     validate_slug(payload.slug)
     validate_iana_timezone(payload.home_timezone)
     validate_trip_dates(payload.status, payload.start_date, payload.end_date)
+    if payload.chronos_sync_enabled:
+        validate_chronos_sync_eligibility(payload.status, payload.start_date, payload.end_date)
 
     existing = db.scalar(select(Trip.id).where(Trip.slug == payload.slug))
     if existing is not None:
@@ -77,10 +80,13 @@ def update_trip(db: Session, trip_id: uuid.UUID, payload: TripUpdate) -> Trip:
     next_status = updates.get("status", trip.status)
     next_start = updates["start_date"] if "start_date" in updates else trip.start_date
     next_end = updates["end_date"] if "end_date" in updates else trip.end_date
+    next_chronos_enabled = updates.get("chronos_sync_enabled", trip.chronos_sync_enabled)
 
     validate_slug(next_slug)
     validate_iana_timezone(next_tz)
     validate_trip_dates(next_status, next_start, next_end)
+    if next_chronos_enabled:
+        validate_chronos_sync_eligibility(next_status, next_start, next_end)
 
     if next_slug != trip.slug:
         conflict = db.scalar(select(Trip.id).where(Trip.slug == next_slug, Trip.id != trip.id))

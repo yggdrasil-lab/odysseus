@@ -1,5 +1,15 @@
 """External I/O adapter protocols and implementations for Odysseus."""
 
+from app.adapters.chronos import (
+    ChronosClientAdapter,
+    ChronosCommitmentRead,
+    ChronosCommitmentUpsert,
+    ChronosNudgeMode,
+    ChronosOverlayMode,
+    ChronosTravelModeResponse,
+    ChronosTravelModeUpsert,
+    HttpChronosClientAdapter,
+)
 from app.adapters.geocoder import (
     GeocoderAdapter,
     GoogleUrlResolverAdapter,
@@ -20,8 +30,16 @@ from app.adapters.plutus import (
 from app.adapters.routing import OsrmRoutingAdapter, RoadRouteResult, RoutingAdapter
 
 __all__ = [
+    "ChronosClientAdapter",
+    "ChronosCommitmentRead",
+    "ChronosCommitmentUpsert",
+    "ChronosNudgeMode",
+    "ChronosOverlayMode",
+    "ChronosTravelModeResponse",
+    "ChronosTravelModeUpsert",
     "GeocoderAdapter",
     "GoogleUrlResolverAdapter",
+    "HttpChronosClientAdapter",
     "HttpPlutusClientAdapter",
     "MapPackBuilderAdapter",
     "OsrmRoutingAdapter",

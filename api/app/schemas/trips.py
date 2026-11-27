@@ -8,6 +8,7 @@ import uuid
 from pydantic import BaseModel, ConfigDict, Field
 
 TripStatus = Literal["planning", "booked", "active", "completed", "archived"]
+ChronosOverlayMode = Literal["suppress_all_grid_blocks", "keep_work_blocks"]
 
 
 class TripCreate(BaseModel):
@@ -25,7 +26,7 @@ class TripCreate(BaseModel):
     immich_album_id: str | None = Field(default=None, max_length=128)
     vault_note_path: str | None = Field(default=None, max_length=500)
     chronos_sync_enabled: bool = False
-    chronos_overlay_mode: str = Field(default="suppress_all_grid_blocks", min_length=1, max_length=64)
+    chronos_overlay_mode: ChronosOverlayMode = "suppress_all_grid_blocks"
     summary: str | None = None
 
 
@@ -44,7 +45,7 @@ class TripUpdate(BaseModel):
     immich_album_id: str | None = Field(default=None, max_length=128)
     vault_note_path: str | None = Field(default=None, max_length=500)
     chronos_sync_enabled: bool | None = None
-    chronos_overlay_mode: str | None = Field(default=None, min_length=1, max_length=64)
+    chronos_overlay_mode: ChronosOverlayMode | None = None
     summary: str | None = None
 
 
@@ -64,7 +65,7 @@ class TripRead(BaseModel):
     immich_album_id: str | None
     vault_note_path: str | None
     chronos_sync_enabled: bool
-    chronos_overlay_mode: str
+    chronos_overlay_mode: ChronosOverlayMode
     summary: str | None
     created_at: datetime
     updated_at: datetime

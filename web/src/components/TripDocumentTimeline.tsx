@@ -1,5 +1,6 @@
 import React from 'react'
 import {
+  CalendarCheck2,
   CalendarDays,
   CheckCircle2,
   Clock,
@@ -66,7 +67,9 @@ export interface TripDocumentTimelineProps {
   onOpenNewTrip: () => void
   onOpenNewLeg: () => void
   onOpenNewItem: (defaultDayId: string | null) => void
+  onOpenChronosSync?: () => void
   onToggleItemDone: (item: ItineraryItem) => Promise<void>
+  onToggleItemChronosSync?: (item: ItineraryItem) => Promise<void>
   onMoveItemDay: (itemId: string, dayId: string | null) => Promise<void>
   onDeleteItem: (itemId: string) => Promise<void>
 }
@@ -77,7 +80,10 @@ interface DaySegmentEntry {
   kind: 'departure' | 'arrival'
 }
 
-const SegmentTimelineRow: React.FC<{ entry: DaySegmentEntry }> = ({ entry }) => {
+const SegmentTimelineRow: React.FC<{ entry: DaySegmentEntry; chronosSyncEnabled: boolean }> = ({
+  entry,
+  chronosSyncEnabled,
+}) => {
   const { booking, segment, kind } = entry
   const origin = segment.origin_code ?? segment.origin_label
   const dest = segment.destination_code ?? segment.destination_label
@@ -111,6 +117,9 @@ const SegmentTimelineRow: React.FC<{ entry: DaySegmentEntry }> = ({ entry }) => 
             {booking.confirmation_code}
           </span>
         )}
+        {chronosSyncEnabled && booking.status === 'confirmed' && (
+          <StatusBadge label="Chronos" variant="success" size="xs" showDot={false} />
+        )}
       </div>
       <span className="font-mono text-[11px] text-accent shrink-0">{timeText}</span>
     </div>
@@ -122,40 +131,57 @@ const ScheduledItemActions: React.FC<{
   isDone: boolean
   readOnly: boolean
   onToggleDone: (item: ItineraryItem) => Promise<void>
+  onToggleChronosSync?: (item: ItineraryItem) => Promise<void>
   onMoveToBacklog: (itemId: string) => Promise<void>
   onDelete: (itemId: string) => Promise<void>
-}> = ({ item, isDone, readOnly, onToggleDone, onMoveToBacklog, onDelete }) => (
-  <div className="flex items-center gap-1.5 shrink-0">
-    <Button
-      variant={isDone ? 'secondary' : 'outline'}
-      size="xs"
-      disabled={readOnly}
-      className="min-h-[44px] sm:min-h-[34px]"
-      icon={<CheckCircle2 className="w-3.5 h-3.5" />}
-      onClick={() => void onToggleDone(item)}
-    >
-      {isDone ? 'Reopen' : 'Done'}
-    </Button>
-    <Button
-      variant="ghost"
-      size="xs"
-      disabled={readOnly}
-      className="min-h-[44px] sm:min-h-[34px]"
-      onClick={() => void onMoveToBacklog(item.id)}
-    >
-      Backlog
-    </Button>
-    <Button
-      variant="danger"
-      size="xs"
-      disabled={readOnly}
-      aria-label={`Delete ${item.title}`}
-      className="min-h-[44px] sm:min-h-[34px]"
-      icon={<Trash2 className="w-3.5 h-3.5" />}
-      onClick={() => void onDelete(item.id)}
-    />
-  </div>
-)
+}> = ({ item, isDone, readOnly, onToggleDone, onToggleChronosSync, onMoveToBacklog, onDelete }) => {
+  const isTimed = Boolean(item.start_utc || item.start_local)
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+      {isTimed && onToggleChronosSync && (
+        <Button
+          variant={item.sync_to_chronos ? 'secondary' : 'outline'}
+          size="xs"
+          disabled={readOnly}
+          aria-label={`Toggle Chronos sync for ${item.title}`}
+          className="min-h-[44px] sm:min-h-[34px]"
+          icon={<CalendarCheck2 className="w-3.5 h-3.5" />}
+          onClick={() => void onToggleChronosSync(item)}
+        >
+          Chronos
+        </Button>
+      )}
+      <Button
+        variant={isDone ? 'secondary' : 'outline'}
+        size="xs"
+        disabled={readOnly}
+        className="min-h-[44px] sm:min-h-[34px]"
+        icon={<CheckCircle2 className="w-3.5 h-3.5" />}
+        onClick={() => void onToggleDone(item)}
+      >
+        {isDone ? 'Reopen' : 'Done'}
+      </Button>
+      <Button
+        variant="ghost"
+        size="xs"
+        disabled={readOnly}
+        className="min-h-[44px] sm:min-h-[34px]"
+        onClick={() => void onMoveToBacklog(item.id)}
+      >
+        Backlog
+      </Button>
+      <Button
+        variant="danger"
+        size="xs"
+        disabled={readOnly}
+        aria-label={`Delete ${item.title}`}
+        className="min-h-[44px] sm:min-h-[34px]"
+        icon={<Trash2 className="w-3.5 h-3.5" />}
+        onClick={() => void onDelete(item.id)}
+      />
+    </div>
+  )
+}
 
 const ScheduledItemRow: React.FC<{
   item: ItineraryItem
@@ -163,9 +189,19 @@ const ScheduledItemRow: React.FC<{
   readOnly: boolean
   companionMode: boolean
   onToggleDone: (item: ItineraryItem) => Promise<void>
+  onToggleChronosSync?: (item: ItineraryItem) => Promise<void>
   onMoveToBacklog: (itemId: string) => Promise<void>
   onDelete: (itemId: string) => Promise<void>
-}> = ({ item, linkedPlace, readOnly, companionMode, onToggleDone, onMoveToBacklog, onDelete }) => {
+}> = ({
+  item,
+  linkedPlace,
+  readOnly,
+  companionMode,
+  onToggleDone,
+  onToggleChronosSync,
+  onMoveToBacklog,
+  onDelete,
+}) => {
   const timeLabel = formatEventLocalTimeLabel(item)
   const isDone = item.status === 'done'
   const placeDisplay = linkedPlace?.name ?? item.place_label
@@ -181,6 +217,7 @@ const ScheduledItemRow: React.FC<{
           </span>
           <StatusBadge label={item.category} variant="info" size="xs" showDot={false} />
           <StatusBadge label={item.status} variant={isDone ? 'success' : item.status === 'confirmed' ? 'info' : 'idle'} size="xs" />
+          {item.sync_to_chronos && <StatusBadge label="Chronos" variant="success" size="xs" showDot={false} />}
         </div>
         <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted">
           {Boolean(timeLabel) && (
@@ -203,6 +240,7 @@ const ScheduledItemRow: React.FC<{
           isDone={isDone}
           readOnly={readOnly}
           onToggleDone={onToggleDone}
+          onToggleChronosSync={onToggleChronosSync}
           onMoveToBacklog={onMoveToBacklog}
           onDelete={onDelete}
         />
@@ -264,6 +302,34 @@ const LegChaptersList: React.FC<{ legs: Leg[]; readOnly: boolean; companionMode:
   </div>
 )
 
+const TripOverviewActions: React.FC<{
+  trips: TimelineTrip[]
+  tripId: string
+  readOnly: boolean
+  onSelectTrip: (tripId: string) => void
+  onOpenNewTrip: () => void
+  onOpenNewLeg: () => void
+}> = ({ trips, tripId, readOnly, onSelectTrip, onOpenNewTrip, onOpenNewLeg }) => (
+  <div className="flex flex-wrap items-center gap-2">
+    {trips.length > 1 && (
+      <SelectInput
+        aria-label="Switch active trip"
+        variant="brand"
+        value={tripId}
+        onChange={(e) => onSelectTrip(e.target.value)}
+        containerClassName="w-44"
+        options={trips.map((entry) => ({ value: entry.id, label: entry.title }))}
+      />
+    )}
+    <Button variant="outline" size="sm" disabled={readOnly} className="min-h-[44px]" icon={<Plus className="w-3.5 h-3.5" />} onClick={onOpenNewTrip}>
+      New Trip
+    </Button>
+    <Button variant="brand" size="sm" disabled={readOnly} className="min-h-[44px]" icon={<Plus className="w-3.5 h-3.5" />} onClick={onOpenNewLeg}>
+      Add Leg
+    </Button>
+  </div>
+)
+
 const TripOverviewCard: React.FC<{
   trips: TimelineTrip[]
   trip: TimelineTrip
@@ -273,72 +339,40 @@ const TripOverviewCard: React.FC<{
   onSelectTrip: (tripId: string) => void
   onOpenNewTrip: () => void
   onOpenNewLeg: () => void
-}> = ({ trips, trip, legs, readOnly, companionMode, onSelectTrip, onOpenNewTrip, onOpenNewLeg }) => {
-  const dateSummary =
-    trip.start_date && trip.end_date
-      ? `${trip.start_date} to ${trip.end_date}`
-      : 'Dates flexible (planning)'
+  onOpenChronosSync?: () => void
+}> = ({ trips, trip, legs, readOnly, companionMode, onSelectTrip, onOpenNewTrip, onOpenNewLeg, onOpenChronosSync }) => {
+  const dateSummary = trip.start_date && trip.end_date ? `${trip.start_date} to ${trip.end_date}` : 'Dates flexible (planning)'
+  const chronosEnabled = 'chronos_sync_enabled' in trip && Boolean(trip.chronos_sync_enabled)
 
   return (
     <GlassCard id="section-overview" tone="glass" padding="md" className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="space-y-1 min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-lg font-bold font-display text-foreground truncate">
-              {trip.title}
-            </h2>
-            <StatusBadge
-              label={trip.status}
-              variant={TRIP_STATUS_VARIANTS[trip.status]}
-              size="xs"
-            />
+            <h2 className="text-lg font-bold font-display text-foreground truncate">{trip.title}</h2>
+            <StatusBadge label={trip.status} variant={TRIP_STATUS_VARIANTS[trip.status]} size="xs" />
+            {!companionMode && onOpenChronosSync && (
+              <Button
+                data-testid="chronos-status-pill"
+                variant={chronosEnabled ? 'secondary' : 'outline'}
+                size="xs"
+                className="min-h-[44px] sm:min-h-[30px]"
+                icon={<CalendarCheck2 className={`w-3.5 h-3.5 ${chronosEnabled ? 'text-emerald-400' : ''}`} />}
+                onClick={onOpenChronosSync}
+              >
+                {chronosEnabled ? 'Chronos: Active' : 'Chronos: Off'}
+              </Button>
+            )}
           </div>
           <p className="text-xs text-muted">
             {dateSummary} · Home TZ: <span className="font-mono">{trip.home_timezone}</span>
           </p>
         </div>
-
         {!companionMode && (
-          <div className="flex flex-wrap items-center gap-2">
-            {trips.length > 1 && (
-              <SelectInput
-                aria-label="Switch active trip"
-                variant="brand"
-                value={trip.id}
-                onChange={(e) => onSelectTrip(e.target.value)}
-                containerClassName="w-44"
-                options={trips.map((entry) => ({ value: entry.id, label: entry.title }))}
-              />
-            )}
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={readOnly}
-              className="min-h-[44px]"
-              icon={<Plus className="w-3.5 h-3.5" />}
-              onClick={onOpenNewTrip}
-            >
-              New Trip
-            </Button>
-            <Button
-              variant="brand"
-              size="sm"
-              disabled={readOnly}
-              className="min-h-[44px]"
-              icon={<Plus className="w-3.5 h-3.5" />}
-              onClick={onOpenNewLeg}
-            >
-              Add Leg
-            </Button>
-          </div>
+          <TripOverviewActions trips={trips} tripId={trip.id} readOnly={readOnly} onSelectTrip={onSelectTrip} onOpenNewTrip={onOpenNewTrip} onOpenNewLeg={onOpenNewLeg} />
         )}
       </div>
-
-      {Boolean(trip.summary) && (
-        <p className="text-xs text-slate-300 leading-relaxed border-t border-border/60 pt-3">
-          {trip.summary}
-        </p>
-      )}
+      {Boolean(trip.summary) && <p className="text-xs text-slate-300 leading-relaxed border-t border-border/60 pt-3">{trip.summary}</p>}
       <LegChaptersList legs={legs} readOnly={readOnly} companionMode={companionMode} onOpenNewLeg={onOpenNewLeg} />
     </GlassCard>
   )
@@ -352,8 +386,10 @@ const DayCard: React.FC<{
   placesById: Map<string, Place>
   readOnly: boolean
   companionMode: boolean
+  chronosSyncEnabled: boolean
   onOpenNewItem: (dayId: string) => void
   onToggleItemDone: (item: ItineraryItem) => Promise<void>
+  onToggleItemChronosSync?: (item: ItineraryItem) => Promise<void>
   onMoveToBacklog: (itemId: string) => Promise<void>
   onDeleteItem: (itemId: string) => Promise<void>
 }> = ({
@@ -364,8 +400,10 @@ const DayCard: React.FC<{
   placesById,
   readOnly,
   companionMode,
+  chronosSyncEnabled,
   onOpenNewItem,
   onToggleItemDone,
+  onToggleItemChronosSync,
   onMoveToBacklog,
   onDeleteItem,
 }) => (
@@ -413,6 +451,7 @@ const DayCard: React.FC<{
           <SegmentTimelineRow
             key={`${entry.kind}-${entry.segment.id}`}
             entry={entry}
+            chronosSyncEnabled={chronosSyncEnabled}
           />
         ))}
       </div>
@@ -431,6 +470,7 @@ const DayCard: React.FC<{
               readOnly={readOnly}
               companionMode={companionMode}
               onToggleDone={onToggleItemDone}
+              onToggleChronosSync={onToggleItemChronosSync}
               onMoveToBacklog={onMoveToBacklog}
               onDelete={onDeleteItem}
             />
@@ -551,79 +591,77 @@ function buildDaySegmentsMap(bookings: TimelineBooking[]): Map<string, DaySegmen
   return map
 }
 
+const TimelineDaysSection: React.FC<{
+  days: Day[]
+  legs: Leg[]
+  items: ItineraryItem[]
+  segmentsByDate: Map<string, DaySegmentEntry[]>
+  placesById: Map<string, Place>
+  readOnly: boolean
+  companionMode: boolean
+  chronosSyncEnabled: boolean
+  onOpenNewItem: (dayId: string | null) => void
+  onToggleItemDone: (item: ItineraryItem) => Promise<void>
+  onToggleItemChronosSync?: (item: ItineraryItem) => Promise<void>
+  onMoveItemDay: (itemId: string, dayId: string | null) => Promise<void>
+  onDeleteItem: (itemId: string) => Promise<void>
+}> = (p) => (
+  <GlassCard id="section-timeline" tone="glass" padding="md" className="space-y-4">
+    <SectionHeader
+      title="Chronological Timeline"
+      subtitle="Flat Trip days with overlapping Leg chapters and event-local wall-clock times"
+      icon={<CalendarDays className="w-4 h-4" />}
+      variant="brand"
+      actions={
+        !p.companionMode ? (
+          <Button variant="brand" size="sm" disabled={p.readOnly} className="min-h-[44px]" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => p.onOpenNewItem(p.days[0]?.id ?? null)}>
+            Add Activity
+          </Button>
+        ) : undefined
+      }
+    />
+    {p.days.length === 0 ? (
+      <EmptyState title="No calendar days provisioned" description="Set trip dates or add a destination Leg to generate chronological Day buckets." />
+    ) : (
+      <div className="space-y-3">
+        {p.days.map((day) => (
+          <DayCard
+            key={day.id} day={day} coveringLegs={legsCoveringDate(p.legs, day.date)}
+            dayItems={p.items.filter((item) => item.day_id === day.id)}
+            daySegments={p.segmentsByDate.get(day.date) ?? []} placesById={p.placesById}
+            readOnly={p.readOnly} companionMode={p.companionMode} chronosSyncEnabled={p.chronosSyncEnabled}
+            onOpenNewItem={p.onOpenNewItem} onToggleItemDone={p.onToggleItemDone}
+            onToggleItemChronosSync={p.onToggleItemChronosSync}
+            onMoveToBacklog={(itemId) => p.onMoveItemDay(itemId, null)} onDeleteItem={p.onDeleteItem}
+          />
+        ))}
+      </div>
+    )}
+  </GlassCard>
+)
+
 export const TripDocumentTimeline: React.FC<TripDocumentTimelineProps> = (props) => {
   const readOnly = Boolean(props.readOnly)
   const companionMode = Boolean(props.companionMode)
+  const chronosSyncEnabled = 'chronos_sync_enabled' in props.trip && Boolean(props.trip.chronos_sync_enabled)
   const backlogItems = props.items.filter((item) => item.day_id === null)
   const placesById = new Map((props.places ?? []).map((p) => [p.id, p]))
   const segmentsByDate = buildDaySegmentsMap(props.bookings ?? [])
   return (
     <div className="space-y-4">
       <TripOverviewCard
-        trips={props.trips}
-        trip={props.trip}
-        legs={props.legs}
-        readOnly={readOnly}
-        companionMode={companionMode}
-        onSelectTrip={props.onSelectTrip}
-        onOpenNewTrip={props.onOpenNewTrip}
-        onOpenNewLeg={props.onOpenNewLeg}
+        trips={props.trips} trip={props.trip} legs={props.legs} readOnly={readOnly} companionMode={companionMode}
+        onSelectTrip={props.onSelectTrip} onOpenNewTrip={props.onOpenNewTrip} onOpenNewLeg={props.onOpenNewLeg} onOpenChronosSync={props.onOpenChronosSync}
       />
-      <GlassCard id="section-timeline" tone="glass" padding="md" className="space-y-4">
-        <SectionHeader
-          title="Chronological Timeline"
-          subtitle="Flat Trip days with overlapping Leg chapters and event-local wall-clock times"
-          icon={<CalendarDays className="w-4 h-4" />}
-          variant="brand"
-          actions={
-            !companionMode ? (
-              <Button
-                variant="brand"
-                size="sm"
-                disabled={readOnly}
-                className="min-h-[44px]"
-                icon={<Plus className="w-3.5 h-3.5" />}
-                onClick={() => props.onOpenNewItem(props.days[0]?.id ?? null)}
-              >
-                Add Activity
-              </Button>
-            ) : undefined
-          }
-        />
-        {props.days.length === 0 ? (
-          <EmptyState
-            title="No calendar days provisioned"
-            description="Set trip dates or add a destination Leg to generate chronological Day buckets."
-          />
-        ) : (
-          <div className="space-y-3">
-            {props.days.map((day) => (
-              <DayCard
-                key={day.id}
-                day={day}
-                coveringLegs={legsCoveringDate(props.legs, day.date)}
-                dayItems={props.items.filter((item) => item.day_id === day.id)}
-                daySegments={segmentsByDate.get(day.date) ?? []}
-                placesById={placesById}
-                readOnly={readOnly}
-                companionMode={companionMode}
-                onOpenNewItem={(dayId) => props.onOpenNewItem(dayId)}
-                onToggleItemDone={props.onToggleItemDone}
-                onMoveToBacklog={(itemId) => props.onMoveItemDay(itemId, null)}
-                onDeleteItem={props.onDeleteItem}
-              />
-            ))}
-          </div>
-        )}
-      </GlassCard>
+      <TimelineDaysSection
+        days={props.days} legs={props.legs} items={props.items} segmentsByDate={segmentsByDate} placesById={placesById}
+        readOnly={readOnly} companionMode={companionMode} chronosSyncEnabled={chronosSyncEnabled}
+        onOpenNewItem={props.onOpenNewItem} onToggleItemDone={props.onToggleItemDone}
+        onToggleItemChronosSync={props.onToggleItemChronosSync} onMoveItemDay={props.onMoveItemDay} onDeleteItem={props.onDeleteItem}
+      />
       <BacklogSectionCard
-        backlogItems={backlogItems}
-        days={props.days}
-        readOnly={readOnly}
-        companionMode={companionMode}
-        onOpenNewItem={() => props.onOpenNewItem(null)}
-        onMoveItemDay={props.onMoveItemDay}
-        onDeleteItem={props.onDeleteItem}
+        backlogItems={backlogItems} days={props.days} readOnly={readOnly} companionMode={companionMode}
+        onOpenNewItem={() => props.onOpenNewItem(null)} onMoveItemDay={props.onMoveItemDay} onDeleteItem={props.onDeleteItem}
       />
     </div>
   )

@@ -201,6 +201,59 @@ describe('OdysseusHttpAdapter fail-loud boundary', () => {
     expect(fetchMock.mock.calls[1][1]?.method).toBe('PATCH')
   })
 
+  it('fetches Chronos preview and posts Chronos sync payload', async () => {
+    const previewPayload = {
+      trip_id: 'trip-1',
+      trip_slug: 'japan-autumn',
+      eligible: true,
+      ineligible_reason: null,
+      sync_enabled: false,
+      overlay_mode: 'suppress_all_grid_blocks',
+      confirmed_segment_count: 1,
+      synced_item_count: 1,
+      anchors: [],
+    }
+    const syncPayload = {
+      trip_id: 'trip-1',
+      trip_slug: 'japan-autumn',
+      sync_enabled: true,
+      overlay_mode: 'keep_work_blocks',
+      overlay_active: true,
+      upserted_count: 2,
+      deleted_count: 1,
+      anchors: [],
+    }
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(previewPayload), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(syncPayload), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+
+    const adapter = new OdysseusHttpAdapter({ fetchImpl: fetchMock })
+    const preview = await adapter.getChronosPreview('trip-1')
+    expect(preview.eligible).toBe(true)
+    expect(preview.confirmed_segment_count).toBe(1)
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/trips/trip-1/chronos/preview')
+
+    const syncRes = await adapter.syncTripToChronos('trip-1', {
+      enabled: true,
+      overlay_mode: 'keep_work_blocks',
+    })
+    expect(syncRes.sync_enabled).toBe(true)
+    expect(syncRes.upserted_count).toBe(2)
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/trips/trip-1/chronos/sync')
+    expect(fetchMock.mock.calls[1][1]?.method).toBe('POST')
+  })
+
   it('normalizes trip titles into valid lowercase slugs', () => {
     expect(createTripSlug('  Pacific Explorer 2027!  ')).toBe('pacific-explorer-2027')
   })

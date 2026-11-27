@@ -22,6 +22,7 @@ export interface WorkspaceViewsProps {
   onOpenNewTrip: () => void
   onOpenNewLeg: () => void
   onOpenNewItem: (dayId: string | null) => void
+  onOpenChronosSync: () => void
   onOpenNewChecklist: () => void
   onOpenNewNote: () => void
   onOpenNewBooking: () => void
@@ -36,13 +37,18 @@ function buildTimelineNode(props: WorkspaceViewsProps) {
   const handleToggleDone = async (item: ItineraryItem) => {
     await state.updateItem(item.id, { status: item.status === 'done' ? 'planned' : 'done' })
   }
+  const handleToggleChronosSync = async (item: ItineraryItem) => {
+    await state.updateItem(item.id, { sync_to_chronos: !item.sync_to_chronos })
+  }
   return (
     <TripDocumentTimeline
       trips={state.trips} trip={workspace.trip} legs={workspace.legs} days={workspace.days}
       items={workspace.itinerary_items} bookings={workspace.bookings} places={workspace.places}
       readOnly={state.isOffline} onSelectTrip={(id) => void state.selectTrip(id)}
       onOpenNewTrip={props.onOpenNewTrip} onOpenNewLeg={props.onOpenNewLeg} onOpenNewItem={props.onOpenNewItem}
-      onToggleItemDone={handleToggleDone} onMoveItemDay={(itemId, dayId) => state.updateItem(itemId, { day_id: dayId })}
+      onOpenChronosSync={props.onOpenChronosSync} onToggleItemDone={handleToggleDone}
+      onToggleItemChronosSync={handleToggleChronosSync}
+      onMoveItemDay={(itemId, dayId) => state.updateItem(itemId, { day_id: dayId })}
       onDeleteItem={state.deleteItem}
     />
   )

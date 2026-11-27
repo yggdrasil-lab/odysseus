@@ -10,6 +10,9 @@ import type {
   ChecklistItem,
   ChecklistItemCreatePayload,
   ChecklistItemUpdatePayload,
+  ChronosPreview,
+  ChronosSyncRequest,
+  ChronosSyncResponse,
   DayRoutesComputeResponse,
   ItineraryItem,
   ItineraryItemCreatePayload,
@@ -80,6 +83,8 @@ export interface OdysseusApiAdapter {
   updateTrip(tripId: string, payload: TripUpdatePayload): Promise<Trip>
   getWorkspace(tripId: string, signal?: AbortSignal): Promise<TripWorkspace>
   getTripBudget(tripId: string, signal?: AbortSignal): Promise<TripBudgetSummary>
+  getChronosPreview(tripId: string, signal?: AbortSignal): Promise<ChronosPreview>
+  syncTripToChronos(tripId: string, payload?: ChronosSyncRequest): Promise<ChronosSyncResponse>
   createLeg(tripId: string, payload: LegCreatePayload): Promise<Leg>
   createItineraryItem(tripId: string, payload: ItineraryItemCreatePayload): Promise<ItineraryItem>
   updateItineraryItem(
@@ -501,6 +506,17 @@ export class OdysseusHttpAdapter implements OdysseusApiAdapter {
 
   getSharedTrip(token: string, signal?: AbortSignal): Promise<SharedTripView> {
     return this.request<SharedTripView>(`/share/${encodeURIComponent(token)}`, { signal })
+  }
+
+  getChronosPreview(tripId: string, signal?: AbortSignal): Promise<ChronosPreview> {
+    return this.request<ChronosPreview>(`/trips/${tripId}/chronos/preview`, { signal })
+  }
+
+  syncTripToChronos(tripId: string, payload: ChronosSyncRequest = {}): Promise<ChronosSyncResponse> {
+    return this.request<ChronosSyncResponse>(`/trips/${tripId}/chronos/sync`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
   }
 
   sharedAttachmentContentUrl(token: string, attachmentId: string): string {

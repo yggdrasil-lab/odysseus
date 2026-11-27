@@ -32,6 +32,9 @@ import type {
   ChecklistItem,
   ChecklistItemCreatePayload,
   ChecklistItemUpdatePayload,
+  ChronosPreview,
+  ChronosSyncRequest,
+  ChronosSyncResponse,
   DayRoutesComputeResponse,
   ItineraryItem,
   ItineraryItemCreatePayload,
@@ -391,6 +394,31 @@ function createSyntheticAdapter(initialFail?: Error): OdysseusApiAdapter {
         },
       ],
     }),
+    getChronosPreview: async (): Promise<ChronosPreview> => ({
+      trip_id: trip.id,
+      trip_slug: trip.slug,
+      eligible: true,
+      ineligible_reason: null,
+      sync_enabled: trip.chronos_sync_enabled,
+      overlay_mode: trip.chronos_overlay_mode,
+      confirmed_segment_count: 1,
+      synced_item_count: 0,
+      anchors: [],
+    }),
+    syncTripToChronos: async (_tripId: string, payload?: ChronosSyncRequest): Promise<ChronosSyncResponse> => {
+      if (payload?.enabled !== undefined) trip.chronos_sync_enabled = payload.enabled
+      if (payload?.overlay_mode !== undefined) trip.chronos_overlay_mode = payload.overlay_mode
+      return {
+        trip_id: trip.id,
+        trip_slug: trip.slug,
+        sync_enabled: trip.chronos_sync_enabled,
+        overlay_mode: trip.chronos_overlay_mode,
+        overlay_active: trip.chronos_sync_enabled,
+        upserted_count: trip.chronos_sync_enabled ? 1 : 0,
+        deleted_count: 0,
+        anchors: [],
+      }
+    },
     createLeg: async (_tripId: string, payload: LegCreatePayload) => {
       const created: Leg = { id: `leg-${legs.length + 1}`, trip_id: trip.id, name: payload.name, primary_city: payload.primary_city, country_code: payload.country_code ?? null, base_timezone: payload.base_timezone, start_date: payload.start_date, end_date: payload.end_date, color: payload.color ?? '#38bdf8', sort_order: legs.length, notes: null, created_at: '', updated_at: '' }
       legs.push(created)
