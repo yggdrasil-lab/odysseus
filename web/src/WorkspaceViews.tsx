@@ -1,10 +1,10 @@
 import React from 'react'
 
 import { BookingsHubSection } from './components/BookingsHubSection'
+import { BudgetSection } from './components/BudgetSection'
 import { ChecklistsAndNotesSection } from './components/ChecklistsAndNotesSection'
 import { LeftJumpRail } from './components/LeftJumpRail'
 import { MapLibrePanel } from './components/MapLibrePanel'
-import { BudgetPlaceholderCard } from './components/PlaceholderSectionCards'
 import { TripDocumentTimeline } from './components/TripDocumentTimeline'
 import type { useOdysseusWorkspace } from './hooks/useOdysseusWorkspace'
 import type { Attachment, Booking, ItineraryItem, MapScope, MobileTab, Place, SharedAttachment, TripWorkspace } from './types'
@@ -106,12 +106,25 @@ function buildSectionNodes(props: WorkspaceViewsProps) {
       onUpdateRouteEstimate={state.updateRouteEstimate}
     />
   )
-  return { timelineNode, bookingsNode, listsNode, mapNode }
+  const budgetNode = (
+    <BudgetSection
+      tripSlug={workspace.trip.slug}
+      configuredBudgetNzd={workspace.trip.budget_nzd}
+      budgetSummary={state.budgetSummary}
+      budgetLoading={state.budgetLoading}
+      budgetError={state.budgetError}
+      isOffline={state.isOffline}
+      readOnly={readOnly}
+      onRefreshBudget={state.refreshBudget}
+      onUpdateBudget={state.updateTripBudget}
+    />
+  )
+  return { timelineNode, bookingsNode, listsNode, mapNode, budgetNode }
 }
 
 export const WorkspaceViews: React.FC<WorkspaceViewsProps> = (props) => {
   const { workspace, mobileTab } = props
-  const { timelineNode, bookingsNode, listsNode, mapNode } = buildSectionNodes(props)
+  const { timelineNode, bookingsNode, listsNode, mapNode, budgetNode } = buildSectionNodes(props)
 
   return (
     <>
@@ -135,7 +148,7 @@ export const WorkspaceViews: React.FC<WorkspaceViewsProps> = (props) => {
           {timelineNode}
           {bookingsNode}
           {listsNode}
-          <BudgetPlaceholderCard budgetNzd={workspace.trip.budget_nzd} />
+          {budgetNode}
         </div>
         {mapNode}
       </div>
@@ -145,7 +158,7 @@ export const WorkspaceViews: React.FC<WorkspaceViewsProps> = (props) => {
         {mobileTab === 'map' && mapNode}
         {mobileTab === 'bookings' && bookingsNode}
         {mobileTab === 'lists' && listsNode}
-        {mobileTab === 'budget' && <BudgetPlaceholderCard budgetNzd={workspace.trip.budget_nzd} />}
+        {mobileTab === 'budget' && budgetNode}
       </div>
     </>
   )

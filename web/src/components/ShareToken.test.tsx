@@ -178,7 +178,9 @@ function makeMockAdapter(overrides?: Partial<OdysseusApiAdapter>): OdysseusApiAd
   return {
     listTrips: noop,
     createTrip: noop,
+    updateTrip: noop,
     getWorkspace: noop,
+    getTripBudget: noop,
     createLeg: noop,
     createItineraryItem: noop,
     updateItineraryItem: noop,
@@ -318,16 +320,18 @@ describe('ShareTokenModal', () => {
 })
 
 describe('App /share/:token Companion View', () => {
-  it('renders read-only companion view without calling listTrips, hides redacted fields, and omits Budget tab', async () => {
+  it('renders read-only companion view without calling listTrips or getTripBudget, hides redacted fields, and omits Budget tab', async () => {
     const listTrips = vi.fn()
+    const getTripBudget = vi.fn()
     const getSharedTrip = vi.fn().mockResolvedValue(makeSharedTripView())
-    const adapter = makeMockAdapter({ listTrips, getSharedTrip })
+    const adapter = makeMockAdapter({ listTrips, getTripBudget, getSharedTrip })
 
     render(<App adapter={adapter} initialPath="/share/tok-demo" />)
 
     expect(await screen.findAllByRole('heading', { name: 'Aegean Companion Voyage' })).not.toHaveLength(0)
     expect(getSharedTrip).toHaveBeenCalledWith('tok-demo', expect.any(AbortSignal))
     expect(listTrips).not.toHaveBeenCalled()
+    expect(getTripBudget).not.toHaveBeenCalled()
 
     expect(screen.getByText('Shared Read-Only')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /New Trip/i })).not.toBeInTheDocument()

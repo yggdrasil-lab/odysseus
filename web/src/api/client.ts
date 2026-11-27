@@ -34,7 +34,9 @@ import type {
   TravelNote,
   TravelNoteCreatePayload,
   Trip,
+  TripBudgetSummary,
   TripCreatePayload,
+  TripUpdatePayload,
   TripWorkspace,
 } from '../types'
 
@@ -75,7 +77,9 @@ export class OdysseusApiError extends Error {
 export interface OdysseusApiAdapter {
   listTrips(signal?: AbortSignal): Promise<Trip[]>
   createTrip(payload: TripCreatePayload): Promise<Trip>
+  updateTrip(tripId: string, payload: TripUpdatePayload): Promise<Trip>
   getWorkspace(tripId: string, signal?: AbortSignal): Promise<TripWorkspace>
+  getTripBudget(tripId: string, signal?: AbortSignal): Promise<TripBudgetSummary>
   createLeg(tripId: string, payload: LegCreatePayload): Promise<Leg>
   createItineraryItem(tripId: string, payload: ItineraryItemCreatePayload): Promise<ItineraryItem>
   updateItineraryItem(
@@ -229,8 +233,19 @@ export class OdysseusHttpAdapter implements OdysseusApiAdapter {
     })
   }
 
+  updateTrip(tripId: string, payload: TripUpdatePayload): Promise<Trip> {
+    return this.request<Trip>(`/trips/${tripId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    })
+  }
+
   getWorkspace(tripId: string, signal?: AbortSignal): Promise<TripWorkspace> {
     return this.request<TripWorkspace>(`/trips/${tripId}/workspace`, { signal })
+  }
+
+  getTripBudget(tripId: string, signal?: AbortSignal): Promise<TripBudgetSummary> {
+    return this.request<TripBudgetSummary>(`/trips/${tripId}/budget`, { signal })
   }
 
   createLeg(tripId: string, payload: LegCreatePayload): Promise<Leg> {

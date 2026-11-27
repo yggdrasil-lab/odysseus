@@ -421,6 +421,74 @@ export interface TripCreatePayload {
   summary?: string | null
 }
 
+export interface TripUpdatePayload {
+  title?: string
+  slug?: string
+  status?: TripStatus
+  start_date?: string | null
+  end_date?: string | null
+  home_timezone?: string
+  budget_nzd?: string | number | null
+  summary?: string | null
+}
+
+export interface BudgetFxRate {
+  rate: string
+  rate_date: string | null
+  source: string
+}
+
+export interface PlannedBookingCost {
+  booking_id: string
+  title: string
+  booking_type: string
+  status: string
+  quoted_cost: string
+  quoted_currency: string
+  fx_rate: string | null
+  nzd_amount: string | null
+}
+
+export interface BudgetCategoryActual {
+  category: string
+  total_spend_nzd: string
+  transaction_count: number
+  percentage: string
+}
+
+export interface SettledTransaction {
+  id: number | string
+  transaction_date: string
+  account_name: string
+  amount: string
+  currency: string
+  exchange_rate: string | null
+  nzd_amount: string | null
+  merchant: string | null
+  category: string | null
+  raw_description: string | null
+  tags: string[]
+}
+
+export interface TripBudgetSummary {
+  trip_id: string
+  trip_slug: string
+  plutus_tag: string
+  budget_nzd: string | null
+  planned_nzd: string | null
+  actual_settled_nzd: string | null
+  remaining_budget_nzd: string | null
+  variance_nzd: string | null
+  plutus_available: boolean
+  plutus_error: string | null
+  midas_url: string | null
+  missing_fx_currencies: string[]
+  fx_rates: Record<string, BudgetFxRate>
+  planned_bookings: PlannedBookingCost[]
+  category_breakdown: BudgetCategoryActual[]
+  transactions: SettledTransaction[]
+}
+
 export interface LegCreatePayload {
   name: string
   primary_city: string

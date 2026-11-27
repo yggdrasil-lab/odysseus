@@ -139,6 +139,68 @@ describe('OdysseusHttpAdapter fail-loud boundary', () => {
     }
   })
 
+  it('fetches trip budget summary and patches trip budget_nzd', async () => {
+    const budgetPayload = {
+      trip_id: 'trip-1',
+      trip_slug: 'japan-autumn',
+      plutus_tag: 'trip:japan-autumn',
+      budget_nzd: '5000.00',
+      planned_nzd: '2400.00',
+      actual_settled_nzd: '1850.25',
+      remaining_budget_nzd: '3149.75',
+      variance_nzd: '-549.75',
+      plutus_available: true,
+      plutus_error: null,
+      midas_url: 'https://midas.example.test/?tag=trip:japan-autumn',
+      missing_fx_currencies: [],
+      fx_rates: { SGD: { rate: '1.2500', rate_date: '2027-01-10', source: 'plutus' } },
+      planned_bookings: [],
+      category_breakdown: [],
+      transactions: [],
+    }
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(budgetPayload), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: 'trip-1',
+            title: 'Japan Autumn',
+            slug: 'japan-autumn',
+            status: 'booked',
+            start_date: null,
+            end_date: null,
+            home_timezone: 'Pacific/Auckland',
+            budget_nzd: '5500.00',
+            immich_album_id: null,
+            vault_note_path: null,
+            chronos_sync_enabled: false,
+            chronos_overlay_mode: 'suppress_all_grid_blocks',
+            summary: null,
+            created_at: '',
+            updated_at: '',
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      )
+
+    const adapter = new OdysseusHttpAdapter({ fetchImpl: fetchMock })
+    const summary = await adapter.getTripBudget('trip-1')
+    expect(summary.plutus_tag).toBe('trip:japan-autumn')
+    expect(summary.actual_settled_nzd).toBe('1850.25')
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/trips/trip-1/budget')
+
+    const updated = await adapter.updateTrip('trip-1', { budget_nzd: '5500.00' })
+    expect(updated.budget_nzd).toBe('5500.00')
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/trips/trip-1')
+    expect(fetchMock.mock.calls[1][1]?.method).toBe('PATCH')
+  })
+
   it('normalizes trip titles into valid lowercase slugs', () => {
     expect(createTripSlug('  Pacific Explorer 2027!  ')).toBe('pacific-explorer-2027')
   })

@@ -53,7 +53,7 @@ export const LeftJumpRail: React.FC<LeftJumpRailProps> = ({
     { href: '#section-backlog', label: 'Backlog', icon: <Inbox className="w-3.5 h-3.5" />, badge: backlogCount },
     ...(!hideChecklists ? [{ href: '#section-checklists', label: 'Checklists', icon: <CheckSquare className="w-3.5 h-3.5" />, badge: checklistCount }] : []),
     ...(!hideNotes ? [{ href: '#section-notes', label: 'Travel Notes', icon: <FileText className="w-3.5 h-3.5" />, badge: noteCount }] : []),
-    ...(!hideBudget ? [{ href: '#section-budget', label: 'Budget', icon: <Wallet className="w-3.5 h-3.5" />, badge: 'T08' }] : []),
+    ...(!hideBudget ? [{ href: '#section-budget', label: 'Budget', icon: <Wallet className="w-3.5 h-3.5" /> }] : []),
   ]
 
   return (
