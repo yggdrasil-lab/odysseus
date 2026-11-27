@@ -720,11 +720,12 @@ async function assertMinTouchHeight(locator: Locator, minPx = 44) {
 
 async function assertHeaderFitsViewport(page: Page) {
   const viewportWidth = page.viewportSize()?.width ?? 390
-  const refreshBox = await page.getByTestId('refresh-button').boundingBox()
+  const header = page.locator('header').first()
+  const refreshBox = await header.getByTestId('refresh-button').boundingBox()
   expect(refreshBox).not.toBeNull()
   expect((refreshBox?.x ?? 0) + (refreshBox?.width ?? 0)).toBeLessThanOrEqual(viewportWidth)
   for (const name of ['Share trip', 'Save Offline', 'New Trip']) {
-    const btn = page.getByRole('button', { name })
+    const btn = header.getByRole('button', { name })
     const box = await btn.boundingBox()
     expect(box).not.toBeNull()
     expect(box?.height ?? 0).toBeGreaterThanOrEqual(44)
@@ -790,7 +791,8 @@ test.describe('Desktop Visual Inspection - Wave 3 Bookings & MapLibre', () => {
     await page.screenshot({ path: 'screenshots/desktop/03-place-modal.png' })
     await page.getByRole('button', { name: 'Close dialog' }).click()
 
-    await page.getByRole('button', { name: 'Share' }).click()
+    const header = page.locator('header').first()
+    await header.getByRole('button', { name: 'Share trip' }).click()
     const shareModal = page.getByTestId('share-token-modal')
     await expect(shareModal).toBeVisible()
     await expect(shareModal.getByText('Companion Family Link')).toBeVisible()
@@ -799,7 +801,7 @@ test.describe('Desktop Visual Inspection - Wave 3 Bookings & MapLibre', () => {
     await page.screenshot({ path: 'screenshots/desktop/06-share-modal.png' })
     await page.getByRole('button', { name: 'Close dialog' }).click()
 
-    await page.getByRole('button', { name: 'Save Offline' }).click()
+    await header.getByRole('button', { name: 'Save Offline' }).click()
     const syncModal = page.getByTestId('offline-sync-modal')
     await expect(syncModal).toBeVisible()
     const mappackCheckbox = syncModal.getByLabel('Include per-Leg .pmtiles MapPacks')
@@ -840,8 +842,9 @@ test.describe('Desktop Visual Inspection - Wave 3 Bookings & MapLibre', () => {
     await expect(desktop.getByRole('heading', { name: 'Pacific Air AKL to HND' })).toBeVisible()
     await expect(desktop.getByText('ODYS99')).toHaveCount(0)
     await expect(desktop.getByText('Station Locker Memo')).toHaveCount(0)
-    await expect(page.getByRole('button', { name: 'New Trip' })).toHaveCount(0)
-    await expect(page.getByRole('button', { name: 'Share' })).toHaveCount(0)
+    const header = page.locator('header').first()
+    await expect(header.getByRole('button', { name: 'New Trip' })).toHaveCount(0)
+    await expect(header.getByRole('button', { name: 'Share trip' })).toHaveCount(0)
     expect(apiPaths.some((p) => p.startsWith('/trips'))).toBe(false)
     await assertNoHorizontalOverflow(page)
     await page.waitForTimeout(350)
@@ -896,7 +899,7 @@ for (const platform of MOBILE_PLATFORMS) {
         await page.screenshot({ path: `screenshots/${platform.name}/05-lists.png`, fullPage: true })
       }
 
-      await page.getByRole('button', { name: 'Offline' }).click()
+      await page.locator('header').first().getByRole('button', { name: 'Save Offline' }).click()
       const syncModal = page.getByTestId('offline-sync-modal')
       await expect(syncModal).toBeVisible()
       await syncModal.getByRole('button', { name: 'Save Trip Offline' }).click()
