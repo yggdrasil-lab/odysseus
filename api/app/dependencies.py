@@ -5,9 +5,11 @@ from fastapi import Request
 from app.adapters import (
     GeocoderAdapter,
     GoogleUrlResolverAdapter,
+    HttpPlutusClientAdapter,
     MapPackBuilderAdapter,
     OsrmRoutingAdapter,
     PhotonGeocoderAdapter,
+    PlutusClientAdapter,
     PmtilesCliAdapter,
     RoutingAdapter,
     UrlResolverAdapter,
@@ -42,6 +44,12 @@ def get_mappack_builder_adapter(request: Request) -> MapPackBuilderAdapter:
     """Provide the configured go-pmtiles CLI extraction adapter."""
     resolved = get_app_settings(request)
     return PmtilesCliAdapter(pmtiles_bin=resolved.pmtiles_bin)
+
+
+def get_plutus_client_adapter(request: Request) -> PlutusClientAdapter:
+    """Provide the configured read-only Plutus HTTP client adapter."""
+    resolved = get_app_settings(request)
+    return HttpPlutusClientAdapter(base_url=resolved.plutus_api_url)
 
 
 def get_share_rate_limiter(request: Request) -> InMemoryRateLimiter:

@@ -9,15 +9,29 @@ from app.adapters.geocoder import (
     UrlResolverAdapter,
 )
 from app.adapters.mappacks import MapPackBuilderAdapter, PmtilesCliAdapter
+from app.adapters.plutus import (
+    HttpPlutusClientAdapter,
+    PlutusClientAdapter,
+    PlutusFxRate,
+    PlutusTagCategorySummary,
+    PlutusTagSummary,
+    PlutusTransaction,
+)
 from app.adapters.routing import OsrmRoutingAdapter, RoadRouteResult, RoutingAdapter
 
 __all__ = [
     "GeocoderAdapter",
     "GoogleUrlResolverAdapter",
+    "HttpPlutusClientAdapter",
     "MapPackBuilderAdapter",
     "OsrmRoutingAdapter",
     "PhotonGeocoderAdapter",
     "PlaceSearchCandidate",
+    "PlutusClientAdapter",
+    "PlutusFxRate",
+    "PlutusTagCategorySummary",
+    "PlutusTagSummary",
+    "PlutusTransaction",
     "PmtilesCliAdapter",
     "ResolvedUrlPlace",
     "RoadRouteResult",
