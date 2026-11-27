@@ -26,6 +26,10 @@ import type {
   ResolvePlaceUrlResponse,
   RouteEstimate,
   RouteEstimateUpdatePayload,
+  ShareToken,
+  ShareTokenCreatePayload,
+  ShareTokenUpdatePayload,
+  SharedTripView,
   TravelMode,
   TravelNote,
   TravelNoteCreatePayload,
@@ -121,6 +125,18 @@ export interface OdysseusApiAdapter {
   createMapPack(tripId: string, payload: MapPackCreatePayload): Promise<MapPack>
   deleteMapPack(tripId: string, packId: string): Promise<void>
   mapPackFileUrl(tripId: string, packId: string): string
+  listShareTokens(tripId: string, signal?: AbortSignal): Promise<ShareToken[]>
+  createShareToken(tripId: string, payload: ShareTokenCreatePayload): Promise<ShareToken>
+  updateShareToken(
+    tripId: string,
+    tokenId: string,
+    payload: ShareTokenUpdatePayload,
+  ): Promise<ShareToken>
+  rotateShareToken(tripId: string, tokenId: string): Promise<ShareToken>
+  revokeShareToken(tripId: string, tokenId: string): Promise<ShareToken>
+  deleteShareToken(tripId: string, tokenId: string): Promise<void>
+  getSharedTrip(token: string, signal?: AbortSignal): Promise<SharedTripView>
+  sharedAttachmentContentUrl(token: string, attachmentId: string): string
 }
 
 function isAuthentikGateResponse(response: Response): boolean {
@@ -426,6 +442,54 @@ export class OdysseusHttpAdapter implements OdysseusApiAdapter {
 
   mapPackFileUrl(tripId: string, packId: string): string {
     return `${this.baseUrl}/trips/${tripId}/mappacks/${packId}/file`
+  }
+
+  listShareTokens(tripId: string, signal?: AbortSignal): Promise<ShareToken[]> {
+    return this.request<ShareToken[]>(`/trips/${tripId}/share-tokens`, { signal })
+  }
+
+  createShareToken(tripId: string, payload: ShareTokenCreatePayload): Promise<ShareToken> {
+    return this.request<ShareToken>(`/trips/${tripId}/share-tokens`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+  }
+
+  updateShareToken(
+    tripId: string,
+    tokenId: string,
+    payload: ShareTokenUpdatePayload,
+  ): Promise<ShareToken> {
+    return this.request<ShareToken>(`/trips/${tripId}/share-tokens/${tokenId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    })
+  }
+
+  rotateShareToken(tripId: string, tokenId: string): Promise<ShareToken> {
+    return this.request<ShareToken>(`/trips/${tripId}/share-tokens/${tokenId}/rotate`, {
+      method: 'POST',
+    })
+  }
+
+  revokeShareToken(tripId: string, tokenId: string): Promise<ShareToken> {
+    return this.request<ShareToken>(`/trips/${tripId}/share-tokens/${tokenId}/revoke`, {
+      method: 'POST',
+    })
+  }
+
+  deleteShareToken(tripId: string, tokenId: string): Promise<void> {
+    return this.request<void>(`/trips/${tripId}/share-tokens/${tokenId}`, {
+      method: 'DELETE',
+    })
+  }
+
+  getSharedTrip(token: string, signal?: AbortSignal): Promise<SharedTripView> {
+    return this.request<SharedTripView>(`/share/${encodeURIComponent(token)}`, { signal })
+  }
+
+  sharedAttachmentContentUrl(token: string, attachmentId: string): string {
+    return `${this.baseUrl}/share/${encodeURIComponent(token)}/attachments/${attachmentId}/content`
   }
 }
 

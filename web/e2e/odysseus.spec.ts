@@ -54,7 +54,7 @@ function buildMinimalPmtilesBuffer(): Buffer {
   return buf
 }
 
-async function mockOdysseusApi(page: Page) {
+async function mockOdysseusApi(page: Page, onApiRequest?: (path: string) => void) {
   const pdfBuffer = buildSyntheticPdfBuffer()
   const pmtilesBuffer = buildMinimalPmtilesBuffer()
 
@@ -391,6 +391,25 @@ async function mockOdysseusApi(page: Page) {
     },
   ]
 
+  const shareTokens: Array<Record<string, unknown>> = [
+    {
+      id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeee01',
+      trip_id: trip.id,
+      token: 'tok-companion-demo',
+      label: 'Companion Family Link',
+      include_pnrs: false,
+      include_attachments: false,
+      include_costs: false,
+      include_checklists: false,
+      include_private_notes: false,
+      expires_at: null,
+      revoked_at: null,
+      created_at: '2027-01-01T00:00:00Z',
+      updated_at: '2027-01-01T00:00:00Z',
+      is_active: true,
+    },
+  ]
+
   await page.route('https://tiles.openfreemap.org/**', async (route) => {
     await route.fulfill({
       status: 200,
@@ -407,6 +426,106 @@ async function mockOdysseusApi(page: Page) {
     const req = route.request()
     const url = new URL(req.url())
     const path = url.pathname.replace(/^\/api/, '')
+    onApiRequest?.(path)
+
+    if (path === '/share/tok-companion-demo' && req.method() === 'GET') {
+      const {
+        immich_album_id: _i,
+        vault_note_path: _v,
+        chronos_sync_enabled: _cs,
+        chronos_overlay_mode: _co,
+        ...sharedTripBase
+      } = trip
+      await route.fulfill({
+        json: {
+          visibility: {
+            include_pnrs: false,
+            include_attachments: false,
+            include_costs: false,
+            include_checklists: false,
+            include_private_notes: false,
+          },
+          trip: { ...sharedTripBase, budget_nzd: null },
+          legs,
+          days,
+          itinerary_items: items,
+          checklists: [],
+          travel_notes: [],
+          bookings: bookings.map(({ source_email_message_id: _s, ...b }) => ({
+            ...b,
+            confirmation_code: null,
+            quoted_cost: null,
+            quoted_currency: null,
+            source_reference: null,
+          })),
+          attachments: [],
+          places,
+          route_estimates: routeEstimates,
+        },
+      })
+      return
+    }
+    if (path === `/trips/${trip.id}/share-tokens` && req.method() === 'GET') {
+      await route.fulfill({ json: shareTokens })
+      return
+    }
+    if (path === `/trips/${trip.id}/share-tokens` && req.method() === 'POST') {
+      const body = req.postDataJSON() as Record<string, unknown>
+      const created = {
+        id: `eeeeeeee-eeee-4eee-8eee-${Date.now().toString().slice(-12)}`,
+        trip_id: trip.id,
+        token: `tok-${Date.now().toString().slice(-6)}`,
+        label: (body.label as string | null) ?? null,
+        include_pnrs: Boolean(body.include_pnrs),
+        include_attachments: Boolean(body.include_attachments),
+        include_costs: Boolean(body.include_costs),
+        include_checklists: Boolean(body.include_checklists),
+        include_private_notes: Boolean(body.include_private_notes),
+        expires_at: (body.expires_at as string | null) ?? null,
+        revoked_at: null,
+        created_at: '2027-01-01T00:00:00Z',
+        updated_at: '2027-01-01T00:00:00Z',
+        is_active: true,
+      }
+      shareTokens.unshift(created)
+      await route.fulfill({ status: 201, json: created })
+      return
+    }
+    const shareMatch = path.match(/^\/trips\/[^/]+\/share-tokens\/([^/]+)(\/(rotate|revoke))?$/)
+    if (shareMatch) {
+      const targetId = shareMatch[1]
+      const action = shareMatch[3]
+      const target = shareTokens.find((t) => t.id === targetId)
+      if (!target) {
+        await route.fulfill({ status: 404, json: { detail: 'Share token not found' } })
+        return
+      }
+      if (req.method() === 'PATCH') {
+        Object.assign(target, req.postDataJSON() as Record<string, unknown>)
+        await route.fulfill({ json: target })
+        return
+      }
+      if (req.method() === 'POST' && action === 'rotate') {
+        target.is_active = false
+        target.revoked_at = '2027-01-02T00:00:00Z'
+        const rotated = { ...target, id: `${targetId}-rot`, token: 'tok-rotated-demo', is_active: true, revoked_at: null }
+        shareTokens.unshift(rotated)
+        await route.fulfill({ json: rotated })
+        return
+      }
+      if (req.method() === 'POST' && action === 'revoke') {
+        target.is_active = false
+        target.revoked_at = '2027-01-02T00:00:00Z'
+        await route.fulfill({ json: target })
+        return
+      }
+      if (req.method() === 'DELETE') {
+        const idx = shareTokens.findIndex((t) => t.id === targetId)
+        if (idx >= 0) shareTokens.splice(idx, 1)
+        await route.fulfill({ status: 204, body: '' })
+        return
+      }
+    }
 
     if (path === '/trips' && req.method() === 'GET') {
       await route.fulfill({ json: [trip] })
@@ -599,6 +718,21 @@ async function assertMinTouchHeight(locator: Locator, minPx = 44) {
   expect(box?.height ?? 0).toBeGreaterThanOrEqual(minPx)
 }
 
+async function assertHeaderFitsViewport(page: Page) {
+  const viewportWidth = page.viewportSize()?.width ?? 390
+  const header = page.locator('header').first()
+  const refreshBox = await header.getByTestId('refresh-button').boundingBox()
+  expect(refreshBox).not.toBeNull()
+  expect((refreshBox?.x ?? 0) + (refreshBox?.width ?? 0)).toBeLessThanOrEqual(viewportWidth)
+  for (const name of ['Share trip', 'Save Offline', 'New Trip']) {
+    const btn = header.getByRole('button', { name })
+    const box = await btn.boundingBox()
+    expect(box).not.toBeNull()
+    expect(box?.height ?? 0).toBeGreaterThanOrEqual(44)
+    expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(viewportWidth)
+  }
+}
+
 const MOBILE_PLATFORMS = [
   {
     name: 'ios',
@@ -657,7 +791,17 @@ test.describe('Desktop Visual Inspection - Wave 3 Bookings & MapLibre', () => {
     await page.screenshot({ path: 'screenshots/desktop/03-place-modal.png' })
     await page.getByRole('button', { name: 'Close dialog' }).click()
 
-    await page.getByRole('button', { name: 'Save Offline' }).click()
+    const header = page.locator('header').first()
+    await header.getByRole('button', { name: 'Share trip' }).click()
+    const shareModal = page.getByTestId('share-token-modal')
+    await expect(shareModal).toBeVisible()
+    await expect(shareModal.getByText('Companion Family Link')).toBeVisible()
+    await expect(shareModal.getByLabel('Include PNRs & codes').first()).not.toBeChecked()
+    await page.waitForTimeout(250)
+    await page.screenshot({ path: 'screenshots/desktop/06-share-modal.png' })
+    await page.getByRole('button', { name: 'Close dialog' }).click()
+
+    await header.getByRole('button', { name: 'Save Offline' }).click()
     const syncModal = page.getByTestId('offline-sync-modal')
     await expect(syncModal).toBeVisible()
     const mappackCheckbox = syncModal.getByLabel('Include per-Leg .pmtiles MapPacks')
@@ -684,6 +828,28 @@ test.describe('Desktop Visual Inspection - Wave 3 Bookings & MapLibre', () => {
     await page.waitForTimeout(250)
     await page.screenshot({ path: 'screenshots/desktop/05-offline-readonly-split.png' })
   })
+
+  test('captures unauthenticated /share/tok-companion-demo desktop companion split without /api/trips', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    const apiPaths: string[] = []
+    await mockOdysseusApi(page, (p) => apiPaths.push(p))
+    await page.goto('/share/tok-companion-demo')
+
+    const desktop = page.getByTestId('desktop-shared-workspace')
+    await expect(desktop).toBeVisible()
+    await expect(page.getByText('Shared Read-Only')).toBeVisible()
+    await expect(desktop.getByRole('heading', { name: 'Pacific Explorer' })).toBeVisible()
+    await expect(desktop.getByRole('heading', { name: 'Pacific Air AKL to HND' })).toBeVisible()
+    await expect(desktop.getByText('ODYS99')).toHaveCount(0)
+    await expect(desktop.getByText('Station Locker Memo')).toHaveCount(0)
+    const header = page.locator('header').first()
+    await expect(header.getByRole('button', { name: 'New Trip' })).toHaveCount(0)
+    await expect(header.getByRole('button', { name: 'Share trip' })).toHaveCount(0)
+    expect(apiPaths.some((p) => p.startsWith('/trips'))).toBe(false)
+    await assertNoHorizontalOverflow(page)
+    await page.waitForTimeout(350)
+    await page.screenshot({ path: 'screenshots/desktop/07-share-companion.png' })
+  })
 })
 
 for (const platform of MOBILE_PLATFORMS) {
@@ -700,6 +866,7 @@ for (const platform of MOBILE_PLATFORMS) {
       await expect(mobile).toBeVisible()
       await expect(mobile.getByTestId('day-card-2027-01-13')).toContainText('Arrival: Pacific Air AKL to HND')
       await assertNoHorizontalOverflow(page)
+      await assertHeaderFitsViewport(page)
       await assertMinTouchHeight(mobile.getByRole('button', { name: 'Add Activity' }))
       await page.screenshot({ path: `screenshots/${platform.name}/01-itinerary.png`, fullPage: true })
 
@@ -732,7 +899,7 @@ for (const platform of MOBILE_PLATFORMS) {
         await page.screenshot({ path: `screenshots/${platform.name}/05-lists.png`, fullPage: true })
       }
 
-      await page.getByRole('button', { name: 'Offline' }).click()
+      await page.locator('header').first().getByRole('button', { name: 'Save Offline' }).click()
       const syncModal = page.getByTestId('offline-sync-modal')
       await expect(syncModal).toBeVisible()
       await syncModal.getByRole('button', { name: 'Save Trip Offline' }).click()
@@ -749,6 +916,23 @@ for (const platform of MOBILE_PLATFORMS) {
       await bottomNav.getByRole('button', { name: 'Map' }).click()
       await expect(mobile.getByText('Offline PMTiles')).toBeVisible()
       await assertNoHorizontalOverflow(page)
+    })
+
+    test(`captures /share/tok-companion-demo mobile companion view on ${platform.name}`, async ({ page }) => {
+      const apiPaths: string[] = []
+      await mockOdysseusApi(page, (p) => apiPaths.push(p))
+      await page.goto('/share/tok-companion-demo')
+
+      const bottomNav = page.getByRole('navigation', { name: 'Main Mobile Navigation' })
+      const mobile = page.getByTestId('mobile-shared-workspace')
+      await expect(bottomNav).toBeVisible()
+      await expect(mobile).toBeVisible()
+      await expect(bottomNav.getByRole('button', { name: 'Budget' })).toHaveCount(0)
+      await assertMinTouchHeight(bottomNav.getByRole('button', { name: 'Itinerary' }))
+      await assertNoHorizontalOverflow(page)
+      expect(apiPaths.some((p) => p.startsWith('/trips'))).toBe(false)
+      await page.waitForTimeout(300)
+      await page.screenshot({ path: `screenshots/${platform.name}/07-share-companion.png` })
     })
   })
 }

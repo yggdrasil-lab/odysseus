@@ -3,9 +3,11 @@
 from app.domain.errors import (
     DomainConflictError,
     DomainError,
+    DomainGoneError,
     DomainNotFoundError,
     DomainPayloadTooLargeError,
     DomainRangeNotSatisfiableError,
+    DomainRateLimitError,
     DomainUpstreamError,
     DomainValidationError,
 )
@@ -21,9 +23,11 @@ from app.domain.timezones import (
 __all__ = [
     "DomainConflictError",
     "DomainError",
+    "DomainGoneError",
     "DomainNotFoundError",
     "DomainPayloadTooLargeError",
     "DomainRangeNotSatisfiableError",
+    "DomainRateLimitError",
     "DomainUpstreamError",
     "DomainValidationError",
     "compute_item_utc_bounds",

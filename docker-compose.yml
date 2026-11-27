@@ -163,6 +163,7 @@ services:
         - "traefik.http.routers.odysseus-web-public.tls.certresolver=cloudflare"
         - "traefik.http.routers.odysseus-web-public.priority=100"
         - "traefik.http.routers.odysseus-web-public.service=odysseus-web"
+        - "traefik.http.routers.odysseus-web-public.middlewares=odysseus-strip-authentik"
 
 secrets:
   odysseus_db_password:

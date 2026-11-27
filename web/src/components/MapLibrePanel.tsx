@@ -283,9 +283,10 @@ const SelectedPlaceDetailCard: React.FC<{
   place: Place
   navProvider: NavProvider
   readOnly: boolean
+  companionMode: boolean
   onEdit: (place: Place) => void
   onDelete: (placeId: string) => Promise<void>
-}> = ({ place, navProvider, readOnly, onEdit, onDelete }) => (
+}> = ({ place, navProvider, readOnly, companionMode, onEdit, onDelete }) => (
   <div data-testid={`selected-place-${place.id}`} className="rounded-ui-control bg-background/70 border border-border/80 p-3 space-y-2">
     <div className="flex items-start justify-between gap-2">
       <div className="space-y-1 min-w-0">
@@ -300,10 +301,12 @@ const SelectedPlaceDetailCard: React.FC<{
           {place.latitude.toFixed(4)}, {place.longitude.toFixed(4)}
         </p>
       </div>
-      <div className="flex items-center gap-1 shrink-0">
-        <Button variant="ghost" size="xs" disabled={readOnly} aria-label={`Edit place ${place.name}`} className="min-h-[44px] sm:min-h-[34px]" icon={<Pencil className="w-3.5 h-3.5" />} onClick={() => onEdit(place)} />
-        <Button variant="ghost" size="xs" disabled={readOnly} aria-label={`Delete place ${place.name}`} className="min-h-[44px] sm:min-h-[34px]" icon={<Trash2 className="w-3.5 h-3.5 text-rose-400" />} onClick={() => void onDelete(place.id)} />
-      </div>
+      {!companionMode && (
+        <div className="flex items-center gap-1 shrink-0">
+          <Button variant="ghost" size="xs" disabled={readOnly} aria-label={`Edit place ${place.name}`} className="min-h-[44px] sm:min-h-[34px]" icon={<Pencil className="w-3.5 h-3.5" />} onClick={() => onEdit(place)} />
+          <Button variant="ghost" size="xs" disabled={readOnly} aria-label={`Delete place ${place.name}`} className="min-h-[44px] sm:min-h-[34px]" icon={<Trash2 className="w-3.5 h-3.5 text-rose-400" />} onClick={() => void onDelete(place.id)} />
+        </div>
+      )}
     </div>
     {Boolean(place.notes) && <p className="text-xs text-slate-300">{place.notes}</p>}
     <a
@@ -324,8 +327,9 @@ const RouteEstimateRow: React.FC<{
   fromName: string
   toName: string
   readOnly: boolean
+  companionMode: boolean
   onUpdateRoute: (routeId: string, payload: RouteEstimateUpdatePayload) => Promise<void>
-}> = ({ route, fromName, toName, readOnly, onUpdateRoute }) => {
+}> = ({ route, fromName, toName, readOnly, companionMode, onUpdateRoute }) => {
   const [editing, setEditing] = useState(false)
   const [durationDraft, setDurationDraft] = useState(String(route.duration_minutes))
   const [modeDraft, setModeDraft] = useState<TravelMode>(route.travel_mode)
@@ -355,9 +359,11 @@ const RouteEstimateRow: React.FC<{
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           <StatusBadge label={route.source} variant={route.source === 'osrm' ? 'success' : route.source === 'manual' ? 'purple' : 'info'} size="xs" showDot={false} />
-          <Button variant="ghost" size="xs" disabled={readOnly} className="min-h-[44px] sm:min-h-[32px]" onClick={() => setEditing((v) => !v)}>
-            {editing ? 'Close' : 'Override'}
-          </Button>
+          {!companionMode && (
+            <Button variant="ghost" size="xs" disabled={readOnly} className="min-h-[44px] sm:min-h-[32px]" onClick={() => setEditing((v) => !v)}>
+              {editing ? 'Close' : 'Override'}
+            </Button>
+          )}
         </div>
       </div>
       {editing && !readOnly && (
@@ -389,13 +395,16 @@ const DayRoutesSection: React.FC<{
   scopedRoutes: RouteEstimate[]
   placesById: Map<string, Place>
   readOnly: boolean
+  companionMode: boolean
   onComputeDayRoutes: (dayId: string, travelMode: TravelMode) => Promise<DayRoutesComputeResponse>
   onUpdateRouteEstimate: (routeId: string, payload: RouteEstimateUpdatePayload) => Promise<void>
-}> = ({ activeDayId, scopedRoutes, placesById, readOnly, onComputeDayRoutes, onUpdateRouteEstimate }) => {
+}> = ({ activeDayId, scopedRoutes, placesById, readOnly, companionMode, onComputeDayRoutes, onUpdateRouteEstimate }) => {
   const [travelMode, setTravelMode] = useState<TravelMode>('drive')
   const [computing, setComputing] = useState(false)
   const [warning, setWarning] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  if (companionMode && scopedRoutes.length === 0) return null
 
   const handleCompute = async () => {
     setComputing(true); setError(null); setWarning(null)
@@ -416,12 +425,14 @@ const DayRoutesSection: React.FC<{
           <Route className="w-3.5 h-3.5 text-accent" />
           <span>Day Route Estimates ({scopedRoutes.length})</span>
         </span>
-        <div className="flex items-center gap-1.5">
-          <SelectInput aria-label="Route travel mode" variant="brand" containerClassName="w-28" disabled={readOnly} value={travelMode} onChange={(e) => setTravelMode(e.target.value as TravelMode)} options={[{ value: 'drive', label: 'Drive' }, { value: 'walk', label: 'Walk' }, { value: 'transit', label: 'Transit' }]} />
-          <Button variant="outline" size="xs" disabled={readOnly} loading={computing} className="min-h-[44px]" onClick={() => void handleCompute()}>
-            Estimate Road Route
-          </Button>
-        </div>
+        {!companionMode && (
+          <div className="flex items-center gap-1.5">
+            <SelectInput aria-label="Route travel mode" variant="brand" containerClassName="w-28" disabled={readOnly} value={travelMode} onChange={(e) => setTravelMode(e.target.value as TravelMode)} options={[{ value: 'drive', label: 'Drive' }, { value: 'walk', label: 'Walk' }, { value: 'transit', label: 'Transit' }]} />
+            <Button variant="outline" size="xs" disabled={readOnly} loading={computing} className="min-h-[44px]" onClick={() => void handleCompute()}>
+              Estimate Road Route
+            </Button>
+          </div>
+        )}
       </div>
       {warning && <AlertBanner variant="warning" title="OSRM Fallback Active">{warning}</AlertBanner>}
       {error && <AlertBanner variant="error" title="Route Compute Failed">{error}</AlertBanner>}
@@ -432,6 +443,7 @@ const DayRoutesSection: React.FC<{
           fromName={placesById.get(route.from_place_id)?.name ?? 'Origin'}
           toName={placesById.get(route.to_place_id)?.name ?? 'Destination'}
           readOnly={readOnly}
+          companionMode={companionMode}
           onUpdateRoute={onUpdateRouteEstimate}
         />
       ))}
@@ -452,6 +464,7 @@ export interface MapLibrePanelProps {
   selectedDayId: string
   onChangeDayId: (dayId: string) => void
   readOnly?: boolean
+  companionMode?: boolean
   isOffline?: boolean
   offlineMapPacks?: OfflineMapPackEntry[]
   onOpenAddPlace: (initialCoords?: { lat: number; lng: number }) => void
@@ -502,6 +515,7 @@ export const MapLibrePanel: React.FC<MapLibrePanelProps> = (props) => {
   const [selectedPlaceId, setSelectedPlaceId] = useState('')
   const [navProvider, setNavProvider] = useState<NavProvider>(() => readNavProviderPreference())
   const readOnly = Boolean(props.readOnly)
+  const companionMode = Boolean(props.companionMode)
   const isOffline = Boolean(props.isOffline)
   const offlinePacks = props.offlineMapPacks ?? []
 
@@ -529,18 +543,20 @@ export const MapLibrePanel: React.FC<MapLibrePanelProps> = (props) => {
     <GlassCard id="section-places" tone="glass" padding="md" className="space-y-3.5 lg:sticky lg:top-20" data-testid="map-preview-panel">
       <SectionHeader
         title="Aegean Atlas"
-        subtitle="MapLibre vector pins, day routes, and zero-key Place entry"
+        subtitle={companionMode ? 'Shared MapLibre pins and day route estimates' : 'MapLibre vector pins, day routes, and zero-key Place entry'}
         icon={<Compass className="w-4 h-4" />}
         variant="brand"
         actions={
-          <div className="flex items-center gap-1.5">
-            <Button variant={dropPinMode ? 'brand' : 'outline'} size="xs" disabled={readOnly} className="min-h-[44px] sm:min-h-[34px]" icon={<MapPin className="w-3.5 h-3.5" />} onClick={() => setDropPinMode((v) => !v)}>
-              {dropPinMode ? 'Tap Map...' : 'Drop Pin'}
-            </Button>
-            <Button variant="brand" size="xs" disabled={readOnly} className="min-h-[44px] sm:min-h-[34px]" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => props.onOpenAddPlace()}>
-              Add Place
-            </Button>
-          </div>
+          !companionMode ? (
+            <div className="flex items-center gap-1.5">
+              <Button variant={dropPinMode ? 'brand' : 'outline'} size="xs" disabled={readOnly} className="min-h-[44px] sm:min-h-[34px]" icon={<MapPin className="w-3.5 h-3.5" />} onClick={() => setDropPinMode((v) => !v)}>
+                {dropPinMode ? 'Tap Map...' : 'Drop Pin'}
+              </Button>
+              <Button variant="brand" size="xs" disabled={readOnly} className="min-h-[44px] sm:min-h-[34px]" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => props.onOpenAddPlace()}>
+                Add Place
+              </Button>
+            </div>
+          ) : undefined
         }
       />
       <MapScopeControls
@@ -563,8 +579,8 @@ export const MapLibrePanel: React.FC<MapLibrePanelProps> = (props) => {
           })}
         </div>
       )}
-      {selectedPlace && <SelectedPlaceDetailCard place={selectedPlace} navProvider={navProvider} readOnly={readOnly} onEdit={props.onEditPlace} onDelete={props.onDeletePlace} />}
-      {activeDayId && <DayRoutesSection activeDayId={activeDayId} scopedRoutes={scopedRoutes} placesById={placesById} readOnly={readOnly} onComputeDayRoutes={props.onComputeDayRoutes} onUpdateRouteEstimate={props.onUpdateRouteEstimate} />}
+      {selectedPlace && <SelectedPlaceDetailCard place={selectedPlace} navProvider={navProvider} readOnly={readOnly} companionMode={companionMode} onEdit={props.onEditPlace} onDelete={props.onDeletePlace} />}
+      {activeDayId && <DayRoutesSection activeDayId={activeDayId} scopedRoutes={scopedRoutes} placesById={placesById} readOnly={readOnly} companionMode={companionMode} onComputeDayRoutes={props.onComputeDayRoutes} onUpdateRouteEstimate={props.onUpdateRouteEstimate} />}
     </GlassCard>
   )
 }

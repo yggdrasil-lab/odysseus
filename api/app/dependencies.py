@@ -13,6 +13,9 @@ from app.adapters import (
     UrlResolverAdapter,
 )
 from app.config import Settings, settings
+from app.domain.rate_limit import InMemoryRateLimiter
+
+_default_share_rate_limiter = InMemoryRateLimiter(limit=60, window_seconds=60)
 
 
 def get_app_settings(request: Request) -> Settings:
@@ -39,3 +42,8 @@ def get_mappack_builder_adapter(request: Request) -> MapPackBuilderAdapter:
     """Provide the configured go-pmtiles CLI extraction adapter."""
     resolved = get_app_settings(request)
     return PmtilesCliAdapter(pmtiles_bin=resolved.pmtiles_bin)
+
+
+def get_share_rate_limiter(request: Request) -> InMemoryRateLimiter:
+    """Provide the per-IP sliding-window rate limiter bound to the FastAPI app."""
+    return getattr(request.app.state, "share_rate_limiter", _default_share_rate_limiter)

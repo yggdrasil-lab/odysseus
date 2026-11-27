@@ -8,6 +8,7 @@ from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.config import Settings, settings
+from app.domain.sharing import SHARE_SECURITY_HEADERS
 
 
 def _extract_authorization_header(scope: Scope) -> str:
@@ -37,6 +38,31 @@ class NoCacheMiddleware:
             await send(message)
 
         await self.app(scope, receive, send_with_no_cache)
+
+
+class ShareSecurityHeadersMiddleware:
+    """Stamp strict noindex, no-referrer, and no-store headers on all /share/* responses."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        path = scope.get("path", "")
+        if path != "/share" and not path.startswith("/share/"):
+            await self.app(scope, receive, send)
+            return
+
+        async def send_with_share_headers(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                headers = MutableHeaders(scope=message)
+                for header_name, header_value in SHARE_SECURITY_HEADERS.items():
+                    headers[header_name] = header_value
+            await send(message)
+
+        await self.app(scope, receive, send_with_share_headers)
 
 
 class McpAuthMiddleware:

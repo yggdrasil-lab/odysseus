@@ -123,6 +123,8 @@ describe('swPolicy request and cache validation', () => {
   it('classifies navigation shell, static assets, and API/cross-origin bypasses', () => {
     const origin = 'https://odysseus.example.com'
     expect(classifySwRequest('https://odysseus.example.com/', 'GET', 'navigate', origin)).toBe('shell-html')
+    expect(classifySwRequest('https://odysseus.example.com/share/tok123', 'GET', 'navigate', origin)).toBe('bypass')
+    expect(classifySwRequest('https://odysseus.example.com/share', 'GET', 'navigate', origin)).toBe('bypass')
     expect(classifySwRequest('https://odysseus.example.com/assets/pdf.worker.min-abc.mjs', 'GET', 'same-origin', origin)).toBe('static-asset')
     expect(classifySwRequest('https://odysseus.example.com/api/trips', 'GET', 'cors', origin)).toBe('bypass')
     expect(classifySwRequest('https://odysseus.example.com/sw.js', 'GET', 'same-origin', origin)).toBe('bypass')

@@ -16,6 +16,7 @@ from app.models import (
     MapPack,
     Place,
     RouteEstimate,
+    ShareToken,
     TravelNote,
     Trip,
 )
@@ -151,6 +152,20 @@ def require_mappack_for_trip(db: Session, trip_id: uuid.UUID, pack_id: uuid.UUID
     if pack is None or pack.trip_id != trip_id:
         raise DomainNotFoundError(f"Map pack {pack_id} not found.")
     return pack
+
+
+def require_share_token_for_trip(
+    db: Session, trip_id: uuid.UUID, token_id: uuid.UUID
+) -> ShareToken:
+    """Return ShareToken belonging to trip_id or raise 404/422."""
+    token_row = db.get(ShareToken, token_id)
+    if token_row is None:
+        raise DomainNotFoundError(f"Share token {token_id} not found.")
+    if token_row.trip_id != trip_id:
+        raise DomainValidationError(
+            f"Share token {token_id} does not belong to trip {trip_id}."
+        )
+    return token_row
 
 
 def reject_explicit_nulls(payload: object, required_fields: tuple[str, ...]) -> None:

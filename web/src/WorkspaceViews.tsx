@@ -7,7 +7,7 @@ import { MapLibrePanel } from './components/MapLibrePanel'
 import { BudgetPlaceholderCard } from './components/PlaceholderSectionCards'
 import { TripDocumentTimeline } from './components/TripDocumentTimeline'
 import type { useOdysseusWorkspace } from './hooks/useOdysseusWorkspace'
-import type { Attachment, Booking, ItineraryItem, MapScope, MobileTab, Place, TripWorkspace } from './types'
+import type { Attachment, Booking, ItineraryItem, MapScope, MobileTab, Place, SharedAttachment, TripWorkspace } from './types'
 
 export interface WorkspaceViewsProps {
   workspace: TripWorkspace
@@ -26,7 +26,7 @@ export interface WorkspaceViewsProps {
   onOpenNewNote: () => void
   onOpenNewBooking: () => void
   onEditBooking: (booking: Booking) => void
-  onViewAttachment: (attachment: Attachment) => void
+  onViewAttachment: (attachment: Attachment | SharedAttachment) => void
   onOpenAddPlace: (coords?: { lat: number; lng: number }) => void
   onEditPlace: (place: Place) => void
 }

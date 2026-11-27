@@ -31,3 +31,15 @@ class DomainRangeNotSatisfiableError(DomainError):
 
 class DomainUpstreamError(DomainError):
     """Raised when an upstream external adapter fails or times out (HTTP 502)."""
+
+
+class DomainGoneError(DomainError):
+    """Raised when a capability share token has been revoked or expired (HTTP 410)."""
+
+
+class DomainRateLimitError(DomainError):
+    """Raised when a client exceeds the per-IP request rate limit (HTTP 429)."""
+
+    def __init__(self, message: str, retry_after: int = 60) -> None:
+        super().__init__(message)
+        self.retry_after = retry_after

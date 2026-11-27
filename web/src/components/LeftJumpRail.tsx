@@ -20,6 +20,9 @@ interface LeftJumpRailProps {
   backlogCount: number
   checklistCount: number
   noteCount: number
+  hideBudget?: boolean
+  hideChecklists?: boolean
+  hideNotes?: boolean
   onJumpToLeg?: (legId: string) => void
 }
 
@@ -37,6 +40,9 @@ export const LeftJumpRail: React.FC<LeftJumpRailProps> = ({
   backlogCount,
   checklistCount,
   noteCount,
+  hideBudget = false,
+  hideChecklists = false,
+  hideNotes = false,
   onJumpToLeg,
 }) => {
   const sections: RailLink[] = [
@@ -45,9 +51,9 @@ export const LeftJumpRail: React.FC<LeftJumpRailProps> = ({
     { href: '#section-bookings', label: 'Bookings', icon: <Ticket className="w-3.5 h-3.5" />, badge: bookingCount },
     { href: '#section-places', label: 'Map & Places', icon: <MapPin className="w-3.5 h-3.5" />, badge: placeCount },
     { href: '#section-backlog', label: 'Backlog', icon: <Inbox className="w-3.5 h-3.5" />, badge: backlogCount },
-    { href: '#section-checklists', label: 'Checklists', icon: <CheckSquare className="w-3.5 h-3.5" />, badge: checklistCount },
-    { href: '#section-notes', label: 'Travel Notes', icon: <FileText className="w-3.5 h-3.5" />, badge: noteCount },
-    { href: '#section-budget', label: 'Budget', icon: <Wallet className="w-3.5 h-3.5" />, badge: 'T08' },
+    ...(!hideChecklists ? [{ href: '#section-checklists', label: 'Checklists', icon: <CheckSquare className="w-3.5 h-3.5" />, badge: checklistCount }] : []),
+    ...(!hideNotes ? [{ href: '#section-notes', label: 'Travel Notes', icon: <FileText className="w-3.5 h-3.5" />, badge: noteCount }] : []),
+    ...(!hideBudget ? [{ href: '#section-budget', label: 'Budget', icon: <Wallet className="w-3.5 h-3.5" />, badge: 'T08' }] : []),
   ]
 
   return (

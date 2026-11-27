@@ -28,9 +28,14 @@ import type {
   ItineraryItem,
   Leg,
   Place,
+  SharedBooking,
+  SharedTripSummary,
   Trip,
   TripStatus,
 } from '../types'
+
+type TimelineTrip = Trip | SharedTripSummary
+type TimelineBooking = Booking | SharedBooking
 import {
   extractLocalDate,
   formatCalendarDayLabel,
@@ -48,14 +53,15 @@ const TRIP_STATUS_VARIANTS: Record<TripStatus, StatusBadgeVariant> = {
 }
 
 export interface TripDocumentTimelineProps {
-  trips: Trip[]
-  trip: Trip
+  trips: TimelineTrip[]
+  trip: TimelineTrip
   legs: Leg[]
   days: Day[]
   items: ItineraryItem[]
-  bookings?: Booking[]
+  bookings?: TimelineBooking[]
   places?: Place[]
   readOnly?: boolean
+  companionMode?: boolean
   onSelectTrip: (tripId: string) => void
   onOpenNewTrip: () => void
   onOpenNewLeg: () => void
@@ -66,7 +72,7 @@ export interface TripDocumentTimelineProps {
 }
 
 interface DaySegmentEntry {
-  booking: Booking
+  booking: TimelineBooking
   segment: BookingSegment
   kind: 'departure' | 'arrival'
 }
@@ -155,10 +161,11 @@ const ScheduledItemRow: React.FC<{
   item: ItineraryItem
   linkedPlace?: Place
   readOnly: boolean
+  companionMode: boolean
   onToggleDone: (item: ItineraryItem) => Promise<void>
   onMoveToBacklog: (itemId: string) => Promise<void>
   onDelete: (itemId: string) => Promise<void>
-}> = ({ item, linkedPlace, readOnly, onToggleDone, onMoveToBacklog, onDelete }) => {
+}> = ({ item, linkedPlace, readOnly, companionMode, onToggleDone, onMoveToBacklog, onDelete }) => {
   const timeLabel = formatEventLocalTimeLabel(item)
   const isDone = item.status === 'done'
   const placeDisplay = linkedPlace?.name ?? item.place_label
@@ -190,21 +197,24 @@ const ScheduledItemRow: React.FC<{
           )}
         </div>
       </div>
-      <ScheduledItemActions
-        item={item}
-        isDone={isDone}
-        readOnly={readOnly}
-        onToggleDone={onToggleDone}
-        onMoveToBacklog={onMoveToBacklog}
-        onDelete={onDelete}
-      />
+      {!companionMode && (
+        <ScheduledItemActions
+          item={item}
+          isDone={isDone}
+          readOnly={readOnly}
+          onToggleDone={onToggleDone}
+          onMoveToBacklog={onMoveToBacklog}
+          onDelete={onDelete}
+        />
+      )}
     </div>
   )
 }
 
-const LegChaptersList: React.FC<{ legs: Leg[]; readOnly: boolean; onOpenNewLeg: () => void }> = ({
+const LegChaptersList: React.FC<{ legs: Leg[]; readOnly: boolean; companionMode: boolean; onOpenNewLeg: () => void }> = ({
   legs,
   readOnly,
+  companionMode,
   onOpenNewLeg,
 }) => (
   <div className="space-y-2 pt-1">
@@ -215,11 +225,13 @@ const LegChaptersList: React.FC<{ legs: Leg[]; readOnly: boolean; onOpenNewLeg: 
     {legs.length === 0 ? (
       <EmptyState
         title="No destination legs yet"
-        description="Add destination legs to automatically provision flat Trip days and timezone chapters."
+        description={companionMode ? 'No destination legs have been added to this trip yet.' : 'Add destination legs to automatically provision flat Trip days and timezone chapters.'}
         action={
-          <Button variant="brand" size="sm" disabled={readOnly} onClick={onOpenNewLeg}>
-            Add First Leg
-          </Button>
+          !companionMode ? (
+            <Button variant="brand" size="sm" disabled={readOnly} onClick={onOpenNewLeg}>
+              Add First Leg
+            </Button>
+          ) : undefined
         }
       />
     ) : (
@@ -253,14 +265,15 @@ const LegChaptersList: React.FC<{ legs: Leg[]; readOnly: boolean; onOpenNewLeg: 
 )
 
 const TripOverviewCard: React.FC<{
-  trips: Trip[]
-  trip: Trip
+  trips: TimelineTrip[]
+  trip: TimelineTrip
   legs: Leg[]
   readOnly: boolean
+  companionMode: boolean
   onSelectTrip: (tripId: string) => void
   onOpenNewTrip: () => void
   onOpenNewLeg: () => void
-}> = ({ trips, trip, legs, readOnly, onSelectTrip, onOpenNewTrip, onOpenNewLeg }) => {
+}> = ({ trips, trip, legs, readOnly, companionMode, onSelectTrip, onOpenNewTrip, onOpenNewLeg }) => {
   const dateSummary =
     trip.start_date && trip.end_date
       ? `${trip.start_date} to ${trip.end_date}`
@@ -285,38 +298,40 @@ const TripOverviewCard: React.FC<{
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          {trips.length > 1 && (
-            <SelectInput
-              aria-label="Switch active trip"
+        {!companionMode && (
+          <div className="flex flex-wrap items-center gap-2">
+            {trips.length > 1 && (
+              <SelectInput
+                aria-label="Switch active trip"
+                variant="brand"
+                value={trip.id}
+                onChange={(e) => onSelectTrip(e.target.value)}
+                containerClassName="w-44"
+                options={trips.map((entry) => ({ value: entry.id, label: entry.title }))}
+              />
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={readOnly}
+              className="min-h-[44px]"
+              icon={<Plus className="w-3.5 h-3.5" />}
+              onClick={onOpenNewTrip}
+            >
+              New Trip
+            </Button>
+            <Button
               variant="brand"
-              value={trip.id}
-              onChange={(e) => onSelectTrip(e.target.value)}
-              containerClassName="w-44"
-              options={trips.map((entry) => ({ value: entry.id, label: entry.title }))}
-            />
-          )}
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={readOnly}
-            className="min-h-[44px]"
-            icon={<Plus className="w-3.5 h-3.5" />}
-            onClick={onOpenNewTrip}
-          >
-            New Trip
-          </Button>
-          <Button
-            variant="brand"
-            size="sm"
-            disabled={readOnly}
-            className="min-h-[44px]"
-            icon={<Plus className="w-3.5 h-3.5" />}
-            onClick={onOpenNewLeg}
-          >
-            Add Leg
-          </Button>
-        </div>
+              size="sm"
+              disabled={readOnly}
+              className="min-h-[44px]"
+              icon={<Plus className="w-3.5 h-3.5" />}
+              onClick={onOpenNewLeg}
+            >
+              Add Leg
+            </Button>
+          </div>
+        )}
       </div>
 
       {Boolean(trip.summary) && (
@@ -324,7 +339,7 @@ const TripOverviewCard: React.FC<{
           {trip.summary}
         </p>
       )}
-      <LegChaptersList legs={legs} readOnly={readOnly} onOpenNewLeg={onOpenNewLeg} />
+      <LegChaptersList legs={legs} readOnly={readOnly} companionMode={companionMode} onOpenNewLeg={onOpenNewLeg} />
     </GlassCard>
   )
 }
@@ -336,6 +351,7 @@ const DayCard: React.FC<{
   daySegments: DaySegmentEntry[]
   placesById: Map<string, Place>
   readOnly: boolean
+  companionMode: boolean
   onOpenNewItem: (dayId: string) => void
   onToggleItemDone: (item: ItineraryItem) => Promise<void>
   onMoveToBacklog: (itemId: string) => Promise<void>
@@ -347,6 +363,7 @@ const DayCard: React.FC<{
   daySegments,
   placesById,
   readOnly,
+  companionMode,
   onOpenNewItem,
   onToggleItemDone,
   onMoveToBacklog,
@@ -376,16 +393,18 @@ const DayCard: React.FC<{
           </div>
         )}
       </div>
-      <Button
-        variant="outline"
-        size="xs"
-        disabled={readOnly}
-        className="min-h-[44px] sm:min-h-[34px]"
-        icon={<Plus className="w-3.5 h-3.5" />}
-        onClick={() => onOpenNewItem(day.id)}
-      >
-        Add to Day
-      </Button>
+      {!companionMode && (
+        <Button
+          variant="outline"
+          size="xs"
+          disabled={readOnly}
+          className="min-h-[44px] sm:min-h-[34px]"
+          icon={<Plus className="w-3.5 h-3.5" />}
+          onClick={() => onOpenNewItem(day.id)}
+        >
+          Add to Day
+        </Button>
+      )}
     </div>
 
     {daySegments.length > 0 && (
@@ -410,6 +429,7 @@ const DayCard: React.FC<{
               item={item}
               linkedPlace={item.place_id ? placesById.get(item.place_id) : undefined}
               readOnly={readOnly}
+              companionMode={companionMode}
               onToggleDone={onToggleItemDone}
               onMoveToBacklog={onMoveToBacklog}
               onDelete={onDeleteItem}
@@ -425,10 +445,11 @@ const BacklogSectionCard: React.FC<{
   backlogItems: ItineraryItem[]
   days: Day[]
   readOnly: boolean
+  companionMode: boolean
   onOpenNewItem: () => void
   onMoveItemDay: (itemId: string, dayId: string | null) => Promise<void>
   onDeleteItem: (itemId: string) => Promise<void>
-}> = ({ backlogItems, days, readOnly, onOpenNewItem, onMoveItemDay, onDeleteItem }) => (
+}> = ({ backlogItems, days, readOnly, companionMode, onOpenNewItem, onMoveItemDay, onDeleteItem }) => (
   <GlassCard id="section-backlog" tone="glass" padding="md" className="space-y-3">
     <SectionHeader
       title="Idea Backlog"
@@ -436,16 +457,18 @@ const BacklogSectionCard: React.FC<{
       icon={<Inbox className="w-4 h-4" />}
       variant="sky"
       actions={
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={readOnly}
-          className="min-h-[44px]"
-          icon={<Plus className="w-3.5 h-3.5" />}
-          onClick={onOpenNewItem}
-        >
-          Add Backlog Idea
-        </Button>
+        !companionMode ? (
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={readOnly}
+            className="min-h-[44px]"
+            icon={<Plus className="w-3.5 h-3.5" />}
+            onClick={onOpenNewItem}
+          >
+            Add Backlog Idea
+          </Button>
+        ) : undefined
       }
     />
     {backlogItems.length === 0 ? (
@@ -474,31 +497,33 @@ const BacklogSectionCard: React.FC<{
                   </p>
                 )}
               </div>
-              <div className="flex items-center gap-2 shrink-0">
-                {days.length > 0 && (
-                  <SelectInput
-                    aria-label={`Schedule ${item.title} to day`}
-                    variant="brand"
+              {!companionMode && (
+                <div className="flex items-center gap-2 shrink-0">
+                  {days.length > 0 && (
+                    <SelectInput
+                      aria-label={`Schedule ${item.title} to day`}
+                      variant="brand"
+                      disabled={readOnly}
+                      value=""
+                      containerClassName="w-40"
+                      placeholder="Schedule day..."
+                      onChange={(e) => {
+                        if (e.target.value) void onMoveItemDay(item.id, e.target.value)
+                      }}
+                      options={days.map((day) => ({ value: day.id, label: day.date }))}
+                    />
+                  )}
+                  <Button
+                    variant="danger"
+                    size="xs"
                     disabled={readOnly}
-                    value=""
-                    containerClassName="w-40"
-                    placeholder="Schedule day..."
-                    onChange={(e) => {
-                      if (e.target.value) void onMoveItemDay(item.id, e.target.value)
-                    }}
-                    options={days.map((day) => ({ value: day.id, label: day.date }))}
+                    aria-label={`Delete ${item.title}`}
+                    className="min-h-[44px]"
+                    icon={<Trash2 className="w-3.5 h-3.5" />}
+                    onClick={() => void onDeleteItem(item.id)}
                   />
-                )}
-                <Button
-                  variant="danger"
-                  size="xs"
-                  disabled={readOnly}
-                  aria-label={`Delete ${item.title}`}
-                  className="min-h-[44px]"
-                  icon={<Trash2 className="w-3.5 h-3.5" />}
-                  onClick={() => void onDeleteItem(item.id)}
-                />
-              </div>
+                </div>
+              )}
             </div>
           )
         })}
@@ -507,7 +532,7 @@ const BacklogSectionCard: React.FC<{
   </GlassCard>
 )
 
-function buildDaySegmentsMap(bookings: Booking[]): Map<string, DaySegmentEntry[]> {
+function buildDaySegmentsMap(bookings: TimelineBooking[]): Map<string, DaySegmentEntry[]> {
   const map = new Map<string, DaySegmentEntry[]>()
   const append = (date: string | null, entry: DaySegmentEntry) => {
     if (!date) return
@@ -528,6 +553,7 @@ function buildDaySegmentsMap(bookings: Booking[]): Map<string, DaySegmentEntry[]
 
 export const TripDocumentTimeline: React.FC<TripDocumentTimelineProps> = (props) => {
   const readOnly = Boolean(props.readOnly)
+  const companionMode = Boolean(props.companionMode)
   const backlogItems = props.items.filter((item) => item.day_id === null)
   const placesById = new Map((props.places ?? []).map((p) => [p.id, p]))
   const segmentsByDate = buildDaySegmentsMap(props.bookings ?? [])
@@ -538,6 +564,7 @@ export const TripDocumentTimeline: React.FC<TripDocumentTimelineProps> = (props)
         trip={props.trip}
         legs={props.legs}
         readOnly={readOnly}
+        companionMode={companionMode}
         onSelectTrip={props.onSelectTrip}
         onOpenNewTrip={props.onOpenNewTrip}
         onOpenNewLeg={props.onOpenNewLeg}
@@ -549,16 +576,18 @@ export const TripDocumentTimeline: React.FC<TripDocumentTimelineProps> = (props)
           icon={<CalendarDays className="w-4 h-4" />}
           variant="brand"
           actions={
-            <Button
-              variant="brand"
-              size="sm"
-              disabled={readOnly}
-              className="min-h-[44px]"
-              icon={<Plus className="w-3.5 h-3.5" />}
-              onClick={() => props.onOpenNewItem(props.days[0]?.id ?? null)}
-            >
-              Add Activity
-            </Button>
+            !companionMode ? (
+              <Button
+                variant="brand"
+                size="sm"
+                disabled={readOnly}
+                className="min-h-[44px]"
+                icon={<Plus className="w-3.5 h-3.5" />}
+                onClick={() => props.onOpenNewItem(props.days[0]?.id ?? null)}
+              >
+                Add Activity
+              </Button>
+            ) : undefined
           }
         />
         {props.days.length === 0 ? (
@@ -577,6 +606,7 @@ export const TripDocumentTimeline: React.FC<TripDocumentTimelineProps> = (props)
                 daySegments={segmentsByDate.get(day.date) ?? []}
                 placesById={placesById}
                 readOnly={readOnly}
+                companionMode={companionMode}
                 onOpenNewItem={(dayId) => props.onOpenNewItem(dayId)}
                 onToggleItemDone={props.onToggleItemDone}
                 onMoveToBacklog={(itemId) => props.onMoveItemDay(itemId, null)}
@@ -590,6 +620,7 @@ export const TripDocumentTimeline: React.FC<TripDocumentTimelineProps> = (props)
         backlogItems={backlogItems}
         days={props.days}
         readOnly={readOnly}
+        companionMode={companionMode}
         onOpenNewItem={() => props.onOpenNewItem(null)}
         onMoveItemDay={props.onMoveItemDay}
         onDeleteItem={props.onDeleteItem}

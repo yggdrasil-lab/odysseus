@@ -12,7 +12,18 @@ import {
 } from '@yggdrasil-lab/ui'
 
 import { OdysseusApiError } from '../api/client'
-import type { Attachment, Booking, BookingSegment, BookingStatus, BookingType } from '../types'
+import type {
+  Attachment,
+  Booking,
+  BookingSegment,
+  BookingStatus,
+  BookingType,
+  SharedAttachment,
+  SharedBooking,
+} from '../types'
+
+type DisplayBooking = Booking | SharedBooking
+type DisplayAttachment = Attachment | SharedAttachment
 import { formatBytesCompact } from '../utils/maps'
 import { extractLocalDate, formatSegmentWallClock } from '../utils/time'
 
@@ -33,15 +44,17 @@ const BOOKING_STATUS_OPTIONS: Array<{ id: 'all' | BookingStatus; label: string }
 ]
 
 export interface BookingsHubSectionProps {
-  bookings: Booking[]
-  attachments: Attachment[]
+  bookings: DisplayBooking[]
+  attachments: DisplayAttachment[]
   readOnly?: boolean
+  companionMode?: boolean
+  attachmentsHiddenNote?: string
   onOpenNewBooking: () => void
   onEditBooking: (booking: Booking) => void
   onDeleteBooking: (bookingId: string) => Promise<void>
   onUploadAttachment: (file: File, bookingId?: string | null) => Promise<void>
   onDeleteAttachment: (attachmentId: string) => Promise<void>
-  onViewAttachment: (attachment: Attachment) => void
+  onViewAttachment: (attachment: DisplayAttachment) => void
 }
 
 function extractUploadError(err: unknown): string {
@@ -83,11 +96,12 @@ const SegmentSummaryRow: React.FC<{ segment: BookingSegment }> = ({ segment }) =
 }
 
 const AttachmentRow: React.FC<{
-  attachment: Attachment
+  attachment: DisplayAttachment
   readOnly: boolean
-  onView: (attachment: Attachment) => void
+  companionMode: boolean
+  onView: (attachment: DisplayAttachment) => void
   onDelete: (attachmentId: string) => Promise<void>
-}> = ({ attachment, readOnly, onView, onDelete }) => (
+}> = ({ attachment, readOnly, companionMode, onView, onDelete }) => (
   <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-background/70 border border-border/70 px-2.5 py-1.5 text-xs">
     <div className="flex items-center gap-2 min-w-0">
       <FileText className="w-3.5 h-3.5 text-accent shrink-0" />
@@ -98,7 +112,9 @@ const AttachmentRow: React.FC<{
       <Button variant="outline" size="xs" className="min-h-[44px] sm:min-h-[34px]" icon={<Eye className="w-3.5 h-3.5" />} onClick={() => onView(attachment)}>
         View
       </Button>
-      <Button variant="ghost" size="xs" disabled={readOnly} aria-label={`Delete attachment ${attachment.filename}`} className="min-h-[44px] sm:min-h-[34px]" icon={<Trash2 className="w-3.5 h-3.5 text-rose-400" />} onClick={() => void onDelete(attachment.id)} />
+      {!companionMode && (
+        <Button variant="ghost" size="xs" disabled={readOnly} aria-label={`Delete attachment ${attachment.filename}`} className="min-h-[44px] sm:min-h-[34px]" icon={<Trash2 className="w-3.5 h-3.5 text-rose-400" />} onClick={() => void onDelete(attachment.id)} />
+      )}
     </div>
   </div>
 )
@@ -139,11 +155,12 @@ const BookingUploadControl: React.FC<{
 }
 
 const BookingCardHeader: React.FC<{
-  booking: Booking
+  booking: DisplayBooking
   readOnly: boolean
+  companionMode: boolean
   onEdit: (booking: Booking) => void
   onDelete: (bookingId: string) => Promise<void>
-}> = ({ booking, readOnly, onEdit, onDelete }) => (
+}> = ({ booking, readOnly, companionMode, onEdit, onDelete }) => (
   <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
     <div className="space-y-1 min-w-0">
       <div className="flex flex-wrap items-center gap-1.5">
@@ -163,43 +180,48 @@ const BookingCardHeader: React.FC<{
         )}
       </div>
     </div>
-    <div className="flex items-center gap-1.5 shrink-0">
-      <Button variant="outline" size="xs" disabled={readOnly} className="min-h-[44px] sm:min-h-[34px]" icon={<Pencil className="w-3.5 h-3.5" />} onClick={() => onEdit(booking)}>Edit</Button>
-      <Button variant="danger" size="xs" disabled={readOnly} aria-label={`Delete booking ${booking.title}`} className="min-h-[44px] sm:min-h-[34px]" icon={<Trash2 className="w-3.5 h-3.5" />} onClick={() => void onDelete(booking.id)} />
-    </div>
+    {!companionMode && (
+      <div className="flex items-center gap-1.5 shrink-0">
+        <Button variant="outline" size="xs" disabled={readOnly} className="min-h-[44px] sm:min-h-[34px]" icon={<Pencil className="w-3.5 h-3.5" />} onClick={() => onEdit(booking as Booking)}>Edit</Button>
+        <Button variant="danger" size="xs" disabled={readOnly} aria-label={`Delete booking ${booking.title}`} className="min-h-[44px] sm:min-h-[34px]" icon={<Trash2 className="w-3.5 h-3.5" />} onClick={() => void onDelete(booking.id)} />
+      </div>
+    )}
   </div>
 )
 
 const BookingCard: React.FC<{
-  booking: Booking
-  attachments: Attachment[]
+  booking: DisplayBooking
+  attachments: DisplayAttachment[]
   readOnly: boolean
+  companionMode: boolean
   onEdit: (booking: Booking) => void
   onDelete: (bookingId: string) => Promise<void>
   onUploadAttachment: (file: File, bookingId: string) => Promise<void>
   onDeleteAttachment: (attachmentId: string) => Promise<void>
-  onViewAttachment: (attachment: Attachment) => void
-}> = ({ booking, attachments, readOnly, onEdit, onDelete, onUploadAttachment, onDeleteAttachment, onViewAttachment }) => {
+  onViewAttachment: (attachment: DisplayAttachment) => void
+}> = ({ booking, attachments, readOnly, companionMode, onEdit, onDelete, onUploadAttachment, onDeleteAttachment, onViewAttachment }) => {
   const orderedSegments = [...booking.segments].sort((a, b) => a.segment_order - b.segment_order)
   return (
     <article data-testid={`booking-card-${booking.id}`} className="rounded-ui-control bg-background/60 border border-border/80 p-3.5 space-y-3">
-      <BookingCardHeader booking={booking} readOnly={readOnly} onEdit={onEdit} onDelete={onDelete} />
+      <BookingCardHeader booking={booking} readOnly={readOnly} companionMode={companionMode} onEdit={onEdit} onDelete={onDelete} />
       {orderedSegments.length > 0 && (
         <div className="space-y-1.5">
           {orderedSegments.map((seg) => <SegmentSummaryRow key={seg.id} segment={seg} />)}
         </div>
       )}
       {Boolean(booking.notes) && <p className="text-xs text-slate-300 leading-relaxed">{booking.notes}</p>}
-      <div className="space-y-2 pt-1 border-t border-border/50">
-        {attachments.map((att) => <AttachmentRow key={att.id} attachment={att} readOnly={readOnly} onView={onViewAttachment} onDelete={onDeleteAttachment} />)}
-        <BookingUploadControl bookingId={booking.id} bookingTitle={booking.title} readOnly={readOnly} onUpload={onUploadAttachment} />
-      </div>
+      {(attachments.length > 0 || !companionMode) && (
+        <div className="space-y-2 pt-1 border-t border-border/50">
+          {attachments.map((att) => <AttachmentRow key={att.id} attachment={att} readOnly={readOnly} companionMode={companionMode} onView={onViewAttachment} onDelete={onDeleteAttachment} />)}
+          {!companionMode && <BookingUploadControl bookingId={booking.id} bookingTitle={booking.title} readOnly={readOnly} onUpload={onUploadAttachment} />}
+        </div>
+      )}
     </article>
   )
 }
 
 const BookingsFilterToolbar: React.FC<{
-  bookings: Booking[]
+  bookings: DisplayBooking[]
   typeFilter: 'all' | BookingType
   statusFilter: 'all' | BookingStatus
   onChangeType: (t: 'all' | BookingType) => void
@@ -228,6 +250,7 @@ const BookingsFilterToolbar: React.FC<{
 )
 
 export const BookingsHubSection: React.FC<BookingsHubSectionProps> = (props) => {
+  const companionMode = Boolean(props.companionMode)
   const [typeFilter, setTypeFilter] = useState<'all' | BookingType>('all')
   const [statusFilter, setStatusFilter] = useState<'all' | BookingStatus>('all')
 
@@ -237,7 +260,7 @@ export const BookingsHubSection: React.FC<BookingsHubSectionProps> = (props) => 
   )
 
   const attachmentsByBooking = useMemo(() => {
-    const map = new Map<string, Attachment[]>()
+    const map = new Map<string, DisplayAttachment[]>()
     for (const att of props.attachments) {
       const key = att.booking_id ?? '__trip__'
       map.set(key, [...(map.get(key) ?? []), att])
@@ -251,21 +274,23 @@ export const BookingsHubSection: React.FC<BookingsHubSectionProps> = (props) => 
     <GlassCard id="section-bookings" tone="glass" padding="md" className="space-y-4">
       <SectionHeader
         title="Bookings & Confirmations"
-        subtitle="Flights, ferries, lodging vouchers, PNR codes, and PDF attachments"
+        subtitle={companionMode ? 'Shared travel reservations and departure timings' : 'Flights, ferries, lodging vouchers, PNR codes, and PDF attachments'}
         icon={<Ticket className="w-4 h-4" />}
         variant="brand"
         actions={
-          <Button variant="brand" size="sm" disabled={props.readOnly} className="min-h-[44px]" icon={<Plus className="w-3.5 h-3.5" />} onClick={props.onOpenNewBooking}>
-            Add Booking
-          </Button>
+          !companionMode ? (
+            <Button variant="brand" size="sm" disabled={props.readOnly} className="min-h-[44px]" icon={<Plus className="w-3.5 h-3.5" />} onClick={props.onOpenNewBooking}>
+              Add Booking
+            </Button>
+          ) : undefined
         }
       />
       <BookingsFilterToolbar bookings={props.bookings} typeFilter={typeFilter} statusFilter={statusFilter} onChangeType={setTypeFilter} onChangeStatus={setStatusFilter} />
       {filteredBookings.length === 0 ? (
         <EmptyState
           title="No matching bookings"
-          description="Add flights, rail passes, or lodging confirmations and attach PDF tickets for offline-ready viewing."
-          action={<Button variant="outline" size="sm" disabled={props.readOnly} className="min-h-[44px]" onClick={props.onOpenNewBooking}>Add First Booking</Button>}
+          description={companionMode ? 'No shared bookings match the current filter.' : 'Add flights, rail passes, or lodging confirmations and attach PDF tickets for offline-ready viewing.'}
+          action={!companionMode ? <Button variant="outline" size="sm" disabled={props.readOnly} className="min-h-[44px]" onClick={props.onOpenNewBooking}>Add First Booking</Button> : undefined}
         />
       ) : (
         <div className="space-y-3">
@@ -275,6 +300,7 @@ export const BookingsHubSection: React.FC<BookingsHubSectionProps> = (props) => 
               booking={booking}
               attachments={attachmentsByBooking.get(booking.id) ?? []}
               readOnly={Boolean(props.readOnly)}
+              companionMode={companionMode}
               onEdit={props.onEditBooking}
               onDelete={props.onDeleteBooking}
               onUploadAttachment={(file, id) => props.onUploadAttachment(file, id)}
@@ -287,8 +313,11 @@ export const BookingsHubSection: React.FC<BookingsHubSectionProps> = (props) => 
       {unattachedFiles.length > 0 && (
         <div className="space-y-2 pt-2 border-t border-border/60">
           <p className="text-[11px] font-bold uppercase tracking-wider text-muted">Trip Documents</p>
-          {unattachedFiles.map((att) => <AttachmentRow key={att.id} attachment={att} readOnly={Boolean(props.readOnly)} onView={props.onViewAttachment} onDelete={props.onDeleteAttachment} />)}
+          {unattachedFiles.map((att) => <AttachmentRow key={att.id} attachment={att} readOnly={Boolean(props.readOnly)} companionMode={companionMode} onView={props.onViewAttachment} onDelete={props.onDeleteAttachment} />)}
         </div>
+      )}
+      {props.attachmentsHiddenNote && props.attachments.length === 0 && (
+        <p className="text-xs text-muted italic pt-1 border-t border-border/50">{props.attachmentsHiddenNote}</p>
       )}
     </GlassCard>
   )
