@@ -5,7 +5,7 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app.domain.errors import DomainNotFoundError
+from app.domain.errors import DomainNotFoundError, DomainValidationError
 from app.models import Checklist, ChecklistItem, TravelNote
 from app.schemas import (
     ChecklistCreate,
@@ -140,6 +140,58 @@ def delete_checklist_item(
     item = require_checklist_item_for_checklist(db, checklist_id, item_id)
     db.delete(item)
     db.commit()
+
+
+def _find_matching_checklist_item(
+    db: Session,
+    checklist_id: uuid.UUID,
+    cleaned_label: str,
+) -> ChecklistItem | None:
+    existing = list(
+        db.scalars(
+            select(ChecklistItem)
+            .where(ChecklistItem.checklist_id == checklist_id)
+            .order_by(ChecklistItem.sort_order, ChecklistItem.created_at)
+        )
+    )
+    target = cleaned_label.lower()
+    return next(
+        (candidate for candidate in existing if candidate.label.strip().lower() == target),
+        None,
+    )
+
+
+def upsert_checklist_item(
+    db: Session,
+    trip_id: uuid.UUID,
+    checklist_id: uuid.UUID,
+    label: str,
+    is_checked: bool,
+    item_id: uuid.UUID | None = None,
+    sort_order: int | None = None,
+) -> ChecklistItem:
+    """Update an item by item_id or case-insensitive stripped label, or create a new item."""
+    require_trip(db, trip_id)
+    require_checklist_for_trip(db, trip_id, checklist_id)
+    cleaned_label = label.strip()
+    if not cleaned_label or len(cleaned_label) > 250:
+        raise DomainValidationError("Checklist item label must be between 1 and 250 characters.")
+
+    if item_id is not None:
+        item = require_checklist_item_for_checklist(db, checklist_id, item_id)
+        item.label = cleaned_label
+    else:
+        item = _find_matching_checklist_item(db, checklist_id, cleaned_label)
+        if item is None:
+            item = ChecklistItem(checklist_id=checklist_id, label=cleaned_label)
+            db.add(item)
+
+    item.is_completed = is_checked
+    if sort_order is not None:
+        item.sort_order = sort_order
+    db.commit()
+    db.refresh(item)
+    return item
 
 
 def list_notes(db: Session, trip_id: uuid.UUID) -> list[TravelNote]:
