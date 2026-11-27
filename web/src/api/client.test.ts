@@ -117,6 +117,28 @@ describe('OdysseusHttpAdapter fail-loud boundary', () => {
     })
   })
 
+  it('surfaces 404, 410, and 429 on getSharedTrip via OdysseusApiError without SessionExpiredError', async () => {
+    for (const [status, detail] of [
+      [404, 'Share link not found'],
+      [410, 'Share link expired or revoked'],
+      [429, 'Rate limit exceeded'],
+    ] as const) {
+      const adapter = new OdysseusHttpAdapter({
+        fetchImpl: vi.fn().mockResolvedValue(
+          new Response(JSON.stringify({ detail }), {
+            status,
+            headers: { 'content-type': 'application/json' },
+          }),
+        ),
+      })
+      await expect(adapter.getSharedTrip('tok-bad')).rejects.toMatchObject({
+        name: 'OdysseusApiError',
+        status,
+        detail,
+      })
+    }
+  })
+
   it('normalizes trip titles into valid lowercase slugs', () => {
     expect(createTripSlug('  Pacific Explorer 2027!  ')).toBe('pacific-explorer-2027')
   })

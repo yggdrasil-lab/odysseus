@@ -19,6 +19,10 @@ import type {
   PlaceSearchCandidate,
   PlaceUpdatePayload,
   ResolvePlaceUrlResponse,
+  ShareToken,
+  ShareTokenCreatePayload,
+  ShareTokenUpdatePayload,
+  SharedAttachment,
   TravelNoteCreatePayload,
   Trip,
   TripCreatePayload,
@@ -27,6 +31,7 @@ import { BookingModal } from './BookingModal'
 import { OfflineSyncModal } from './OfflineSyncModal'
 import { PdfViewerModal } from './PdfViewerModal'
 import { PlaceEntryModal } from './PlaceEntryModal'
+import { ShareTokenModal } from './ShareTokenModal'
 import {
   CreateChecklistModal,
   CreateItemModal,
@@ -60,7 +65,7 @@ interface WorkspaceModalsProps {
   onCloseBookingModal: () => void
   onCreateBooking: (payload: BookingCreatePayload) => Promise<void>
   onUpdateBooking: (bookingId: string, payload: BookingUpdatePayload) => Promise<void>
-  viewingAttachment: Attachment | null
+  viewingAttachment: Attachment | SharedAttachment | null
   attachmentContentUrl: string
   isOffline: boolean
   offlineBlobLoader: (attachmentId: string) => Promise<Blob | null>
@@ -85,6 +90,17 @@ interface WorkspaceModalsProps {
   onClearOffline: () => Promise<void>
   onCreateMapPack: (payload: MapPackCreatePayload) => Promise<void>
   onDeleteMapPack: (packId: string) => Promise<void>
+  shareModalOpen: boolean
+  onCloseShareModal: () => void
+  shareTokens: ShareToken[]
+  shareTokensLoading: boolean
+  shareTokensError: string | null
+  onLoadShareTokens: () => Promise<void>
+  onCreateShareToken: (payload: ShareTokenCreatePayload) => Promise<ShareToken>
+  onUpdateShareToken: (tokenId: string, payload: ShareTokenUpdatePayload) => Promise<ShareToken>
+  onRotateShareToken: (tokenId: string) => Promise<ShareToken>
+  onRevokeShareToken: (tokenId: string) => Promise<ShareToken>
+  onDeleteShareToken: (tokenId: string) => Promise<void>
 }
 
 export const WorkspaceModals: React.FC<WorkspaceModalsProps> = (props) => (
@@ -143,6 +159,23 @@ export const WorkspaceModals: React.FC<WorkspaceModalsProps> = (props) => (
         onClearOffline={props.onClearOffline}
         onCreateMapPack={props.onCreateMapPack}
         onDeleteMapPack={props.onDeleteMapPack}
+      />
+    )}
+    {props.activeTrip && (
+      <ShareTokenModal
+        isOpen={props.shareModalOpen}
+        onClose={props.onCloseShareModal}
+        trip={props.activeTrip}
+        tokens={props.shareTokens}
+        loading={props.shareTokensLoading}
+        error={props.shareTokensError}
+        isOffline={props.isOffline}
+        onLoadTokens={props.onLoadShareTokens}
+        onCreateToken={props.onCreateShareToken}
+        onUpdateToken={props.onUpdateShareToken}
+        onRotateToken={props.onRotateShareToken}
+        onRevokeToken={props.onRevokeShareToken}
+        onDeleteToken={props.onDeleteShareToken}
       />
     )}
   </>

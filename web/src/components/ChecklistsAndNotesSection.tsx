@@ -16,6 +16,9 @@ interface ChecklistsAndNotesSectionProps {
   notes: TravelNote[]
   legs: Leg[]
   readOnly?: boolean
+  companionMode?: boolean
+  hideChecklists?: boolean
+  hideNotes?: boolean
   onOpenNewChecklist: () => void
   onAddChecklistItem: (checklistId: string, label: string) => Promise<void>
   onToggleChecklistItem: (checklistId: string, item: ChecklistItem) => Promise<void>
@@ -29,9 +32,10 @@ const ChecklistItemRow: React.FC<{
   item: ChecklistItem
   linkedLeg?: Leg
   readOnly: boolean
+  companionMode: boolean
   onToggleItem: (checklistId: string, item: ChecklistItem) => Promise<void>
   onDeleteItem: (checklistId: string, itemId: string) => Promise<void>
-}> = ({ checklistId, item, linkedLeg, readOnly, onToggleItem, onDeleteItem }) => (
+}> = ({ checklistId, item, linkedLeg, readOnly, companionMode, onToggleItem, onDeleteItem }) => (
   <div className="flex items-center justify-between gap-2 rounded-lg bg-card/70 border border-border/60 px-2.5 py-1.5">
     <button
       type="button"
@@ -56,15 +60,17 @@ const ChecklistItemRow: React.FC<{
         </span>
       )}
     </button>
-    <Button
-      variant="ghost"
-      size="xs"
-      disabled={readOnly}
-      aria-label={`Remove ${item.label}`}
-      className="min-h-[44px]"
-      icon={<Trash2 className="w-3.5 h-3.5 text-rose-400" />}
-      onClick={() => void onDeleteItem(checklistId, item.id)}
-    />
+    {!companionMode && (
+      <Button
+        variant="ghost"
+        size="xs"
+        disabled={readOnly}
+        aria-label={`Remove ${item.label}`}
+        className="min-h-[44px]"
+        icon={<Trash2 className="w-3.5 h-3.5 text-rose-400" />}
+        onClick={() => void onDeleteItem(checklistId, item.id)}
+      />
+    )}
   </div>
 )
 
@@ -72,10 +78,11 @@ const ChecklistCard: React.FC<{
   checklist: Checklist
   legsById: Map<string, Leg>
   readOnly: boolean
+  companionMode: boolean
   onAddItem: (checklistId: string, label: string) => Promise<void>
   onToggleItem: (checklistId: string, item: ChecklistItem) => Promise<void>
   onDeleteItem: (checklistId: string, itemId: string) => Promise<void>
-}> = ({ checklist, legsById, readOnly, onAddItem, onToggleItem, onDeleteItem }) => {
+}> = ({ checklist, legsById, readOnly, companionMode, onAddItem, onToggleItem, onDeleteItem }) => {
   const [draftLabel, setDraftLabel] = useState('')
   const completedCount = checklist.items.filter((item) => item.is_completed).length
 
@@ -110,24 +117,27 @@ const ChecklistCard: React.FC<{
             item={item}
             linkedLeg={item.leg_id ? legsById.get(item.leg_id) : undefined}
             readOnly={readOnly}
+            companionMode={companionMode}
             onToggleItem={onToggleItem}
             onDeleteItem={onDeleteItem}
           />
         ))}
       </div>
-      <form onSubmit={(e) => void handleSubmit(e)} className="flex items-center gap-2">
-        <TextInput
-          variant="brand"
-          disabled={readOnly}
-          value={draftLabel}
-          onChange={(e) => setDraftLabel(e.target.value)}
-          placeholder={`Add item to ${checklist.title}...`}
-          aria-label={`New item for ${checklist.title}`}
-        />
-        <Button type="submit" variant="brand" size="sm" disabled={readOnly} className="min-h-[44px] shrink-0">
-          Add
-        </Button>
-      </form>
+      {!companionMode && (
+        <form onSubmit={(e) => void handleSubmit(e)} className="flex items-center gap-2">
+          <TextInput
+            variant="brand"
+            disabled={readOnly}
+            value={draftLabel}
+            onChange={(e) => setDraftLabel(e.target.value)}
+            placeholder={`Add item to ${checklist.title}...`}
+            aria-label={`New item for ${checklist.title}`}
+          />
+          <Button type="submit" variant="brand" size="sm" disabled={readOnly} className="min-h-[44px] shrink-0">
+            Add
+          </Button>
+        </form>
+      )}
     </div>
   )
 }
@@ -136,8 +146,9 @@ const TravelNoteArticle: React.FC<{
   note: TravelNote
   linkedLeg?: Leg
   readOnly: boolean
+  companionMode: boolean
   onDeleteNote: (noteId: string) => Promise<void>
-}> = ({ note, linkedLeg, readOnly, onDeleteNote }) => (
+}> = ({ note, linkedLeg, readOnly, companionMode, onDeleteNote }) => (
   <article
     data-testid={`travel-note-${note.id}`}
     className="rounded-ui-control bg-background/60 border border-border/80 p-3.5 space-y-2"
@@ -154,15 +165,17 @@ const TravelNoteArticle: React.FC<{
           </span>
         )}
       </div>
-      <Button
-        variant="ghost"
-        size="xs"
-        disabled={readOnly}
-        aria-label={`Delete note ${note.title}`}
-        className="min-h-[44px] sm:min-h-[34px]"
-        icon={<Trash2 className="w-3.5 h-3.5 text-rose-400" />}
-        onClick={() => void onDeleteNote(note.id)}
-      />
+      {!companionMode && (
+        <Button
+          variant="ghost"
+          size="xs"
+          disabled={readOnly}
+          aria-label={`Delete note ${note.title}`}
+          className="min-h-[44px] sm:min-h-[34px]"
+          icon={<Trash2 className="w-3.5 h-3.5 text-rose-400" />}
+          onClick={() => void onDeleteNote(note.id)}
+        />
+      )}
     </div>
     <p className="text-xs text-slate-300 whitespace-pre-wrap leading-relaxed">{note.body}</p>
   </article>
@@ -173,6 +186,9 @@ export const ChecklistsAndNotesSection: React.FC<ChecklistsAndNotesSectionProps>
   notes,
   legs,
   readOnly = false,
+  companionMode = false,
+  hideChecklists = false,
+  hideNotes = false,
   onOpenNewChecklist,
   onAddChecklistItem,
   onToggleChecklistItem,
@@ -183,65 +199,75 @@ export const ChecklistsAndNotesSection: React.FC<ChecklistsAndNotesSectionProps>
   const legsById = new Map(legs.map((leg) => [leg.id, leg]))
   return (
     <div className="space-y-4">
-      <GlassCard id="section-checklists" tone="glass" padding="md" className="space-y-4">
-        <SectionHeader
-          title="Checklists"
-          subtitle="Packing, prep, shopping, and custom trip lists"
-          icon={<CheckSquare className="w-4 h-4" />}
-          variant="emerald"
-          actions={
-            <Button variant="brand" size="sm" disabled={readOnly} className="min-h-[44px]" icon={<Plus className="w-3.5 h-3.5" />} onClick={onOpenNewChecklist}>
-              New Checklist
-            </Button>
-          }
-        />
-        {checklists.length === 0 ? (
-          <EmptyState title="No checklists yet" description="Create packing, prep, or shopping lists tied to your trip." />
-        ) : (
-          <div className="space-y-3">
-            {checklists.map((checklist) => (
-              <ChecklistCard
-                key={checklist.id}
-                checklist={checklist}
-                legsById={legsById}
-                readOnly={readOnly}
-                onAddItem={onAddChecklistItem}
-                onToggleItem={onToggleChecklistItem}
-                onDeleteItem={onDeleteChecklistItem}
-              />
-            ))}
-          </div>
-        )}
-      </GlassCard>
+      {!hideChecklists && (
+        <GlassCard id="section-checklists" tone="glass" padding="md" className="space-y-4">
+          <SectionHeader
+            title="Checklists"
+            subtitle="Packing, prep, shopping, and custom trip lists"
+            icon={<CheckSquare className="w-4 h-4" />}
+            variant="emerald"
+            actions={
+              !companionMode ? (
+                <Button variant="brand" size="sm" disabled={readOnly} className="min-h-[44px]" icon={<Plus className="w-3.5 h-3.5" />} onClick={onOpenNewChecklist}>
+                  New Checklist
+                </Button>
+              ) : undefined
+            }
+          />
+          {checklists.length === 0 ? (
+            <EmptyState title="No checklists yet" description="Create packing, prep, or shopping lists tied to your trip." />
+          ) : (
+            <div className="space-y-3">
+              {checklists.map((checklist) => (
+                <ChecklistCard
+                  key={checklist.id}
+                  checklist={checklist}
+                  legsById={legsById}
+                  readOnly={readOnly}
+                  companionMode={companionMode}
+                  onAddItem={onAddChecklistItem}
+                  onToggleItem={onToggleChecklistItem}
+                  onDeleteItem={onDeleteChecklistItem}
+                />
+              ))}
+            </div>
+          )}
+        </GlassCard>
+      )}
 
-      <GlassCard id="section-notes" tone="glass" padding="md" className="space-y-4">
-        <SectionHeader
-          title="Travel Notes"
-          subtitle="Shared context and private traveler memos"
-          icon={<FileText className="w-4 h-4" />}
-          variant="purple"
-          actions={
-            <Button variant="outline" size="sm" disabled={readOnly} className="min-h-[44px]" icon={<Plus className="w-3.5 h-3.5" />} onClick={onOpenNewNote}>
-              Add Note
-            </Button>
-          }
-        />
-        {notes.length === 0 ? (
-          <EmptyState title="No travel notes yet" description="Capture visa reminders, locker codes, or arrival instructions." />
-        ) : (
-          <div className="space-y-2.5">
-            {notes.map((note) => (
-              <TravelNoteArticle
-                key={note.id}
-                note={note}
-                linkedLeg={note.leg_id ? legsById.get(note.leg_id) : undefined}
-                readOnly={readOnly}
-                onDeleteNote={onDeleteNote}
-              />
-            ))}
-          </div>
-        )}
-      </GlassCard>
+      {!hideNotes && (
+        <GlassCard id="section-notes" tone="glass" padding="md" className="space-y-4">
+          <SectionHeader
+            title="Travel Notes"
+            subtitle={companionMode ? 'Shared trip memos and arrival notes' : 'Shared context and private traveler memos'}
+            icon={<FileText className="w-4 h-4" />}
+            variant="purple"
+            actions={
+              !companionMode ? (
+                <Button variant="outline" size="sm" disabled={readOnly} className="min-h-[44px]" icon={<Plus className="w-3.5 h-3.5" />} onClick={onOpenNewNote}>
+                  Add Note
+                </Button>
+              ) : undefined
+            }
+          />
+          {notes.length === 0 ? (
+            <EmptyState title="No travel notes yet" description="Capture visa reminders, locker codes, or arrival instructions." />
+          ) : (
+            <div className="space-y-2.5">
+              {notes.map((note) => (
+                <TravelNoteArticle
+                  key={note.id}
+                  note={note}
+                  linkedLeg={note.leg_id ? legsById.get(note.leg_id) : undefined}
+                  readOnly={readOnly}
+                  companionMode={companionMode}
+                  onDeleteNote={onDeleteNote}
+                />
+              ))}
+            </div>
+          )}
+        </GlassCard>
+      )}
     </div>
   )
 }

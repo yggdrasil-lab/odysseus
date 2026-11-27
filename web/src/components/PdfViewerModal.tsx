@@ -4,8 +4,10 @@ import * as pdfjsLib from 'pdfjs-dist'
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { AlertBanner, Button, LoadingState, Modal } from '@yggdrasil-lab/ui'
 
-import type { Attachment } from '../types'
+import type { Attachment, SharedAttachment } from '../types'
 import { formatBytesCompact } from '../utils/maps'
+
+type ViewableAttachment = Attachment | SharedAttachment
 
 if (pdfjsLib.GlobalWorkerOptions) {
   pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
@@ -22,7 +24,7 @@ function getSharedPdfWorker(): pdfjsLib.PDFWorker | undefined {
 }
 
 interface PdfViewerModalProps {
-  attachment: Attachment | null
+  attachment: ViewableAttachment | null
   contentUrl: string
   isOffline?: boolean
   offlineBlobLoader?: (attachmentId: string) => Promise<Blob | null>
@@ -50,7 +52,7 @@ async function readBlobArrayBuffer(blob: Blob): Promise<ArrayBuffer> {
 }
 
 async function resolveAttachmentSource(options: {
-  attachment: Attachment
+  attachment: ViewableAttachment
   contentUrl: string
   isPdf: boolean
   isOffline: boolean
@@ -71,7 +73,7 @@ async function resolveAttachmentSource(options: {
 }
 
 function usePdfDocumentLoader(options: {
-  attachment: Attachment | null
+  attachment: ViewableAttachment | null
   contentUrl: string
   isPdf: boolean
   isOffline: boolean

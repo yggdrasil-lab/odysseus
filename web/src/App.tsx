@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { CalendarDays, CheckSquare, Compass, DownloadCloud, HardDriveDownload, Map as MapIcon, Plus, Ticket, Wallet, WifiOff } from 'lucide-react'
+import { CalendarDays, CheckSquare, Compass, DownloadCloud, HardDriveDownload, Map as MapIcon, Plus, Share2, Ticket, Wallet, WifiOff } from 'lucide-react'
 import {
   AlertBanner,
   AppHeader,
@@ -13,14 +13,23 @@ import {
 import { OdysseusHttpAdapter, type OdysseusApiAdapter } from './api/client'
 import { WorkspaceViews } from './WorkspaceViews'
 import { IosInstallBanner } from './components/IosInstallBanner'
+import { SharedTripView } from './components/SharedTripView'
 import { WorkspaceModals } from './components/WorkspaceModals'
 import { useOdysseusWorkspace, type WorkspaceErrorState } from './hooks/useOdysseusWorkspace'
 import type { OfflineStorageAdapter } from './offline/storage'
-import type { Attachment, Booking, MapScope, MobileTab, Place } from './types'
+import type { Attachment, Booking, MapScope, MobileTab, Place, SharedAttachment } from './types'
 
 export interface AppProps {
   adapter?: OdysseusApiAdapter
   offlineStorage?: OfflineStorageAdapter
+  initialPath?: string
+}
+
+const SHARE_PATH_PATTERN = /^\/share\/([A-Za-z0-9_-]+)\/?$/
+
+export function parseShareTokenFromPath(pathname: string): string | null {
+  const match = SHARE_PATH_PATTERN.exec(pathname)
+  return match ? match[1] : null
 }
 
 const MOBILE_TABS = [
@@ -53,11 +62,12 @@ function useShellUiState() {
   const [noteModalOpen, setNoteModalOpen] = useState(false)
   const [bookingModalOpen, setBookingModalOpen] = useState(false)
   const [editingBooking, setEditingBooking] = useState<Booking | null>(null)
-  const [viewingAttachment, setViewingAttachment] = useState<Attachment | null>(null)
+  const [viewingAttachment, setViewingAttachment] = useState<Attachment | SharedAttachment | null>(null)
   const [placeModalOpen, setPlaceModalOpen] = useState(false)
   const [editingPlace, setEditingPlace] = useState<Place | null>(null)
   const [initialPlaceCoords, setInitialPlaceCoords] = useState<{ lat: number; lng: number } | null>(null)
   const [offlineModalOpen, setOfflineModalOpen] = useState(false)
+  const [shareModalOpen, setShareModalOpen] = useState(false)
 
   return {
     mobileTab, setMobileTab, mapScope, setMapScope, mapLegId, setMapLegId, mapDayId, setMapDayId,
@@ -66,7 +76,7 @@ function useShellUiState() {
     bookingModalOpen, setBookingModalOpen, editingBooking, setEditingBooking,
     viewingAttachment, setViewingAttachment, placeModalOpen, setPlaceModalOpen,
     editingPlace, setEditingPlace, initialPlaceCoords, setInitialPlaceCoords,
-    offlineModalOpen, setOfflineModalOpen,
+    offlineModalOpen, setOfflineModalOpen, shareModalOpen, setShareModalOpen,
   }
 }
 
@@ -100,13 +110,21 @@ const AppModalsHost: React.FC<{
       isSyncing={state.isSyncing} offlineError={state.offlineError}
       onSaveOffline={state.saveTripOffline} onClearOffline={state.clearTripOffline}
       onCreateMapPack={state.createMapPack} onDeleteMapPack={state.deleteMapPack}
+      shareModalOpen={ui.shareModalOpen} onCloseShareModal={() => ui.setShareModalOpen(false)}
+      shareTokens={state.shareTokens} shareTokensLoading={state.shareTokensLoading}
+      shareTokensError={state.shareTokensError} onLoadShareTokens={state.loadShareTokens}
+      onCreateShareToken={state.createShareToken} onUpdateShareToken={state.updateShareToken}
+      onRotateShareToken={state.rotateShareToken} onRevokeShareToken={state.revokeShareToken}
+      onDeleteShareToken={state.deleteShareToken}
     />
   )
 }
 
-export function App({ adapter, offlineStorage }: AppProps) {
-  const resolvedAdapter = useMemo(() => adapter ?? new OdysseusHttpAdapter(), [adapter])
-  const state = useOdysseusWorkspace(resolvedAdapter, offlineStorage)
+const AuthorWorkspaceApp: React.FC<{
+  adapter: OdysseusApiAdapter
+  offlineStorage?: OfflineStorageAdapter
+}> = ({ adapter, offlineStorage }) => {
+  const state = useOdysseusWorkspace(adapter, offlineStorage)
   const ui = useShellUiState()
   const workspace = state.workspace
   const isSavedOffline = Boolean(state.offlineSummary)
@@ -120,16 +138,28 @@ export function App({ adapter, offlineStorage }: AppProps) {
         actions={
           <div className="flex items-center gap-1.5">
             {workspace && (
-              <Button
-                variant={isSavedOffline ? 'secondary' : 'outline'}
-                size="sm"
-                className="min-h-[38px]"
-                icon={isSavedOffline ? <HardDriveDownload className="w-3.5 h-3.5 text-emerald-400" /> : <DownloadCloud className="w-3.5 h-3.5" />}
-                onClick={() => ui.setOfflineModalOpen(true)}
-              >
-                <span className="hidden sm:inline">{isSavedOffline ? 'Saved Offline' : 'Save Offline'}</span>
-                <span className="sm:hidden">{isSavedOffline ? 'Saved' : 'Offline'}</span>
-              </Button>
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={state.isOffline}
+                  className="min-h-[38px]"
+                  icon={<Share2 className="w-3.5 h-3.5" />}
+                  onClick={() => ui.setShareModalOpen(true)}
+                >
+                  Share
+                </Button>
+                <Button
+                  variant={isSavedOffline ? 'secondary' : 'outline'}
+                  size="sm"
+                  className="min-h-[38px]"
+                  icon={isSavedOffline ? <HardDriveDownload className="w-3.5 h-3.5 text-emerald-400" /> : <DownloadCloud className="w-3.5 h-3.5" />}
+                  onClick={() => ui.setOfflineModalOpen(true)}
+                >
+                  <span className="hidden sm:inline">{isSavedOffline ? 'Saved Offline' : 'Save Offline'}</span>
+                  <span className="sm:hidden">{isSavedOffline ? 'Saved' : 'Offline'}</span>
+                </Button>
+              </>
             )}
             <Button variant="brand" size="sm" disabled={state.isOffline} className="min-h-[38px]" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => ui.setTripModalOpen(true)}>
               <span className="hidden sm:inline">New Trip</span>
@@ -176,4 +206,15 @@ export function App({ adapter, offlineStorage }: AppProps) {
       <AppModalsHost ui={ui} state={state} />
     </div>
   )
+}
+
+export function App({ adapter, offlineStorage, initialPath }: AppProps) {
+  const resolvedAdapter = useMemo(() => adapter ?? new OdysseusHttpAdapter(), [adapter])
+  const pathname = initialPath ?? (typeof window !== 'undefined' ? window.location.pathname : '/')
+  const shareToken = parseShareTokenFromPath(pathname)
+
+  if (shareToken) {
+    return <SharedTripView token={shareToken} adapter={resolvedAdapter} />
+  }
+  return <AuthorWorkspaceApp adapter={resolvedAdapter} offlineStorage={offlineStorage} />
 }

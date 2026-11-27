@@ -4,6 +4,7 @@ import { ApiRoutingError, SessionExpiredError, type OdysseusApiAdapter } from '.
 import { BrowserOfflineStorageAdapter, type OfflineStorageAdapter } from '../offline/storage'
 import type { DayRoutesComputeResponse, TravelMode, Trip, TripWorkspace } from '../types'
 import { useOfflineTripSync } from './useOfflineTripSync'
+import { useShareTokens } from './useShareTokens'
 import { buildWorkspaceActions } from './workspaceActions'
 
 export interface WorkspaceErrorState {
@@ -245,6 +246,9 @@ export function useOdysseusWorkspace(adapter: OdysseusApiAdapter, storage?: Offl
   const offline = useOfflineTripSync({
     adapter, storage: resolvedStorage, selectedTripId: queries.selectedTripId, isOffline, reloadWorkspace: queries.reloadWorkspace,
   })
+  const shareTokens = useShareTokens({
+    adapter, selectedTripId: queries.selectedTripId, isOffline,
+  })
 
   const selectTrip = useCallback(
     async (tripId: string) => { queries.setSelectedTripId(tripId); setActionError(null); await queries.reloadWorkspace(tripId) },
@@ -259,6 +263,6 @@ export function useOdysseusWorkspace(adapter: OdysseusApiAdapter, storage?: Offl
     trips: queries.trips, selectedTripId: queries.selectedTripId, workspace: queries.workspace,
     isLoading: queries.isLoading, isRefreshing: queries.isRefreshing, loadError: queries.loadError,
     actionError, isOffline, clearActionError: () => setActionError(null), selectTrip, refresh,
-    ...wave3, ...mutations, ...offline,
+    ...wave3, ...mutations, ...offline, ...shareTokens,
   }
 }

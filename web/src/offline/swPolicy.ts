@@ -28,6 +28,7 @@ export function classifySwRequest(
   if (parsed.origin !== baseOrigin) return 'bypass'
   const { pathname } = parsed
   if (pathname === '/api' || pathname.startsWith('/api/')) return 'bypass'
+  if (pathname === '/share' || pathname.startsWith('/share/')) return 'bypass'
   if (SW_SELF_PATHS.has(pathname) || pathname.startsWith('/workbox-')) return 'bypass'
   if (pathname.startsWith('/assets/') || STATIC_ROOT_PATHS.has(pathname)) {
     return 'static-asset'
@@ -35,8 +36,7 @@ export function classifySwRequest(
   if (
     mode === 'navigate' ||
     pathname === '/' ||
-    pathname === '/index.html' ||
-    pathname.startsWith('/share/')
+    pathname === '/index.html'
   ) {
     return 'shell-html'
   }

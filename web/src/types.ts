@@ -8,6 +8,8 @@ export type ChecklistType = 'packing' | 'prep' | 'shopping' | 'custom'
 
 export type MobileTab = 'itinerary' | 'map' | 'bookings' | 'lists' | 'budget'
 
+export type SharedTab = 'itinerary' | 'map' | 'bookings' | 'lists'
+
 export type MapScope = 'trip' | 'leg' | 'day'
 
 export type BookingType = 'flight' | 'lodging' | 'transport' | 'activity' | 'insurance'
@@ -484,4 +486,110 @@ export interface TravelNoteCreatePayload {
   is_private?: boolean
   leg_id?: string | null
   day_id?: string | null
+}
+
+export interface ShareVisibility {
+  include_pnrs: boolean
+  include_attachments: boolean
+  include_costs: boolean
+  include_checklists: boolean
+  include_private_notes: boolean
+}
+
+export interface ShareToken {
+  id: string
+  trip_id: string
+  token: string
+  label: string | null
+  include_pnrs: boolean
+  include_attachments: boolean
+  include_costs: boolean
+  include_checklists: boolean
+  include_private_notes: boolean
+  expires_at: string | null
+  revoked_at: string | null
+  created_at: string
+  updated_at: string
+  is_active: boolean
+}
+
+export interface ShareTokenCreatePayload {
+  label?: string | null
+  include_pnrs?: boolean
+  include_attachments?: boolean
+  include_costs?: boolean
+  include_checklists?: boolean
+  include_private_notes?: boolean
+  expires_at?: string | null
+}
+
+export interface ShareTokenUpdatePayload {
+  label?: string | null
+  include_pnrs?: boolean
+  include_attachments?: boolean
+  include_costs?: boolean
+  include_checklists?: boolean
+  include_private_notes?: boolean
+  expires_at?: string | null
+}
+
+export interface SharedTripSummary {
+  id: string
+  title: string
+  slug: string
+  status: TripStatus
+  start_date: string | null
+  end_date: string | null
+  home_timezone: string
+  budget_nzd: string | null
+  chronos_sync_enabled: boolean
+  chronos_overlay_mode: string
+  summary: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface SharedBooking {
+  id: string
+  trip_id: string | null
+  booking_type: BookingType
+  status: BookingStatus
+  title: string
+  provider: string | null
+  confirmation_code: string | null
+  quoted_cost: string | null
+  quoted_currency: string | null
+  source_reference: string | null
+  notes: string | null
+  sort_order: number
+  segments: BookingSegment[]
+  created_at: string
+  updated_at: string
+}
+
+export interface SharedAttachment {
+  id: string
+  trip_id: string
+  booking_id: string | null
+  filename: string
+  mime_type: string
+  size_bytes: number
+  sha256: string
+  content_url: string
+  extracted_text?: string | null
+  created_at: string
+}
+
+export interface SharedTripView {
+  visibility: ShareVisibility
+  trip: SharedTripSummary
+  legs: Leg[]
+  days: Day[]
+  itinerary_items: ItineraryItem[]
+  checklists: Checklist[]
+  travel_notes: TravelNote[]
+  bookings: SharedBooking[]
+  attachments: SharedAttachment[]
+  places: Place[]
+  route_estimates: RouteEstimate[]
 }
