@@ -23,6 +23,7 @@ import { App } from './App'
 import { OdysseusApiError, type OdysseusApiAdapter } from './api/client'
 import { InMemoryOfflineStorageAdapter } from './offline/storage'
 import type {
+  AssignBookingPayload,
   Attachment,
   Booking,
   BookingCreatePayload,
@@ -61,9 +62,22 @@ import type {
   TripCreatePayload,
   TripUpdatePayload,
   TripWorkspace,
+  UnassignedBooking,
 } from './types'
 
-function createSyntheticAdapter(initialFail?: Error): OdysseusApiAdapter {
+interface SyntheticAdapterOptions {
+  initialFail?: Error
+  emptyTrips?: boolean
+  extraBookings?: Booking[]
+  initialUnassigned?: UnassignedBooking[]
+}
+
+function createSyntheticAdapter(
+  failOrOptions?: Error | SyntheticAdapterOptions,
+): OdysseusApiAdapter {
+  const opts: SyntheticAdapterOptions =
+    failOrOptions instanceof Error ? { initialFail: failOrOptions } : (failOrOptions ?? {})
+  const initialFail = opts.initialFail
   const trip: Trip = {
     id: 'trip-1',
     title: 'Pacific Explorer',
@@ -244,7 +258,14 @@ function createSyntheticAdapter(initialFail?: Error): OdysseusApiAdapter {
       created_at: '',
       updated_at: '',
     },
+    ...(opts.extraBookings ?? []),
   ]
+
+  const unassignedBookings: UnassignedBooking[] = (opts.initialUnassigned ?? []).map((b) => ({
+    ...b,
+    segments: [...b.segments],
+    attachments: [...b.attachments],
+  }))
 
   const attachments: Attachment[] = [
     {
@@ -319,7 +340,7 @@ function createSyntheticAdapter(initialFail?: Error): OdysseusApiAdapter {
     },
   ]
 
-  const trips = [trip]
+  const trips = opts.emptyTrips ? [] : [trip]
 
   return {
     listTrips: async () => {
@@ -491,10 +512,43 @@ function createSyntheticAdapter(initialFail?: Error): OdysseusApiAdapter {
       Object.assign(target, payload)
       return { ...target }
     },
+    confirmBooking: async (_tripId: string, bookingId: string) => {
+      const target = bookings.find((b) => b.id === bookingId)!
+      target.status = 'confirmed'
+      return { ...target }
+    },
     deleteBooking: async (_tripId: string, bookingId: string) => {
       const idx = bookings.findIndex((b) => b.id === bookingId)
       if (idx >= 0) bookings.splice(idx, 1)
     },
+    listUnassignedBookings: async () =>
+      unassignedBookings.map((b) => ({
+        ...b,
+        segments: [...b.segments],
+        attachments: [...b.attachments],
+      })),
+    assignUnassignedBooking: async (bookingId: string, payload: AssignBookingPayload) => {
+      const idx = unassignedBookings.findIndex((b) => b.id === bookingId)
+      const target = unassignedBookings[idx]
+      unassignedBookings.splice(idx, 1)
+      const { attachments: movedAttachments, ...bookingFields } = target
+      const assigned: Booking = {
+        ...bookingFields,
+        trip_id: payload.trip_id,
+        status: payload.confirm === false ? 'draft' : 'confirmed',
+      }
+      bookings.push(assigned)
+      for (const att of movedAttachments) {
+        attachments.push({ ...att, trip_id: payload.trip_id })
+      }
+      return assigned
+    },
+    deleteUnassignedBooking: async (bookingId: string) => {
+      const idx = unassignedBookings.findIndex((b) => b.id === bookingId)
+      if (idx >= 0) unassignedBookings.splice(idx, 1)
+    },
+    unassignedAttachmentContentUrl: (bookingId: string, attachmentId: string) =>
+      `/api/bookings/unassigned/${bookingId}/attachments/${attachmentId}/content`,
     uploadAttachment: async (_tripId: string, file: File, bookingId?: string | null) => {
       const created: Attachment = { id: `att-${attachments.length + 1}`, trip_id: trip.id, booking_id: bookingId ?? null, filename: file.name, mime_type: file.type || 'application/pdf', size_bytes: file.size || 256, sha256: 'hash', extracted_text: null, created_at: '' }
       attachments.push(created)
@@ -893,5 +947,157 @@ describe('Odysseus Wave 3 Workspace Shell', () => {
       expect(modal.querySelector('a[download="offline-voucher.pdf"]')).toHaveAttribute('href', 'blob:offline-pdf-url')
     })
     expect(fetchSpy).not.toHaveBeenCalled()
+  })
+})
+
+function makeSampleUnassigned(overrides?: Partial<UnassignedBooking>): UnassignedBooking {
+  return {
+    id: 'ub-1',
+    trip_id: null,
+    booking_type: 'lodging',
+    status: 'draft',
+    title: 'Harbour Lodge Reservation',
+    provider: 'Harbour Lodge',
+    confirmation_code: 'HTL552',
+    quoted_cost: '420.50',
+    quoted_currency: 'SGD',
+    source_reference: 'iris-email-202',
+    source_email_message_id: '<msg-202@hotel.example>',
+    raw_email_payload: {
+      from_address: 'Harbour Lodge <reservations@harbourlodge.example>',
+      subject: 'Fwd: Harbour Lodge Reservation',
+      excerpt: 'Check-in 2027-09-10 for Alex Tan. Total SGD 420.50.',
+    },
+    notes: 'From: reservations@harbourlodge.example',
+    sort_order: 0,
+    segments: [],
+    attachments: [
+      {
+        id: 'uatt-1',
+        trip_id: null,
+        booking_id: 'ub-1',
+        filename: 'hotel-voucher.pdf',
+        mime_type: 'application/pdf',
+        size_bytes: 2048,
+        sha256: 'sha-unassigned-1',
+        extracted_text: 'Harbour Lodge HTL552',
+        created_at: '',
+      },
+    ],
+    created_at: '',
+    updated_at: '',
+    ...overrides,
+  }
+}
+
+describe('Ticket 10 Inbound Email Bookings & Draft Review', () => {
+  it('renders InboundBookingsInbox when 0 trips exist and dismisses unassigned booking', async () => {
+    const adapter = createSyntheticAdapter({
+      emptyTrips: true,
+      initialUnassigned: [makeSampleUnassigned()],
+    })
+    render(<App adapter={adapter} offlineStorage={new InMemoryOfflineStorageAdapter()} />)
+
+    const inbox = await screen.findByTestId('inbound-bookings-inbox')
+    expect(inbox).toHaveTextContent('Inbound Bookings Inbox (1)')
+    expect(inbox).toHaveTextContent('Harbour Lodge Reservation')
+    expect(inbox).toHaveTextContent('HTL552')
+    expect(screen.getByRole('button', { name: 'Assign & Confirm' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Assign Draft' })).toBeDisabled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }))
+    await waitFor(() => {
+      expect(screen.queryByTestId('inbound-bookings-inbox')).not.toBeInTheDocument()
+    })
+  })
+
+  it('views unassigned PDF inline, assigns draft, and confirms with 1-tap Confirm button', async () => {
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null)
+    const adapter = createSyntheticAdapter({
+      initialUnassigned: [makeSampleUnassigned()],
+    })
+    render(<App adapter={adapter} offlineStorage={new InMemoryOfflineStorageAdapter()} />)
+
+    const inbox = (await screen.findAllByTestId('inbound-bookings-inbox'))[0]
+    const viewButtons = inbox.querySelectorAll('button')
+    const viewBtn = Array.from(viewButtons).find((btn) => btn.textContent?.includes('View'))!
+    fireEvent.click(viewBtn)
+
+    const pdfModal = await screen.findByTestId('pdf-viewer-modal')
+    expect(pdfModal.querySelector('a[download="hotel-voucher.pdf"]')).toHaveAttribute(
+      'href',
+      '/api/bookings/unassigned/ub-1/attachments/uatt-1/content',
+    )
+    expect(openSpy).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Close dialog' }))
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Assign Draft' })[0])
+    await waitFor(() => {
+      expect(screen.queryByTestId('inbound-bookings-inbox')).not.toBeInTheDocument()
+    })
+    expect(screen.getAllByText('Harbour Lodge Reservation').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('From Iris').length).toBeGreaterThan(0)
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Confirm' })[0])
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'Confirm' })).not.toBeInTheDocument()
+    })
+  })
+
+  it('supports 1-tap Assign & Confirm directly from InboundBookingsInbox', async () => {
+    const adapter = createSyntheticAdapter({
+      initialUnassigned: [makeSampleUnassigned()],
+    })
+    render(<App adapter={adapter} offlineStorage={new InMemoryOfflineStorageAdapter()} />)
+
+    await screen.findAllByTestId('inbound-bookings-inbox')
+    fireEvent.click(screen.getAllByRole('button', { name: 'Assign & Confirm' })[0])
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('inbound-bookings-inbox')).not.toBeInTheDocument()
+    })
+    expect(screen.getAllByText('Harbour Lodge Reservation').length).toBeGreaterThan(0)
+    expect(screen.queryByRole('button', { name: 'Confirm' })).not.toBeInTheDocument()
+  })
+
+  it('disables draft Confirm button when Offline Read-Only mode is active', async () => {
+    const draftBooking: Booking = {
+      id: 'book-draft-1',
+      trip_id: 'trip-1',
+      booking_type: 'transport',
+      status: 'draft',
+      title: 'Cook Strait Ferry Draft',
+      provider: 'Bluebridge',
+      confirmation_code: 'BB7788',
+      quoted_cost: '210.00',
+      quoted_currency: 'NZD',
+      source_reference: 'iris-ferry-1',
+      source_email_message_id: '<ferry-draft@ferry.example>',
+      notes: 'From: bookings@bluebridge.example',
+      sort_order: 1,
+      segments: [],
+      created_at: '',
+      updated_at: '',
+    }
+    const adapter = createSyntheticAdapter({ extraBookings: [draftBooking] })
+    const storage = new InMemoryOfflineStorageAdapter()
+    const workspace = await adapter.getWorkspace('trip-1')
+    await storage.putTripRecord({
+      tripId: 'trip-1',
+      syncedAt: '2027-01-10T10:00:00Z',
+      workspaceSha256: 'ws-sha',
+      workspace,
+      attachmentIds: ['att-1'],
+      mapPackIds: [],
+      totalBytes: 2048,
+      includesMapPacks: false,
+    })
+
+    Object.defineProperty(window.navigator, 'onLine', { configurable: true, value: false })
+    render(<App adapter={adapter} offlineStorage={storage} />)
+
+    expect(await screen.findByText('Offline Read-Only')).toBeInTheDocument()
+    expect(screen.getAllByText('From Iris').length).toBeGreaterThan(0)
+    expect(screen.getAllByRole('button', { name: 'Confirm' })[0]).toBeDisabled()
   })
 })

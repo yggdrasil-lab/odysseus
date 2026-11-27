@@ -2,7 +2,7 @@
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Literal
+from typing import Any, Literal
 import uuid
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field
@@ -127,6 +127,7 @@ class BookingRead(BaseModel):
     quoted_currency: str | None
     source_reference: str | None
     source_email_message_id: str | None
+    raw_email_payload: dict[str, Any] | None = None
     notes: str | None
     sort_order: int
     segments: list[BookingSegmentRead]
@@ -140,7 +141,7 @@ class AttachmentRead(BaseModel):
     model_config = ConfigDict(frozen=True, from_attributes=True)
 
     id: uuid.UUID
-    trip_id: uuid.UUID
+    trip_id: uuid.UUID | None
     booking_id: uuid.UUID | None
     filename: str
     mime_type: str
@@ -148,3 +149,18 @@ class AttachmentRead(BaseModel):
     sha256: str
     extracted_text: str | None
     created_at: datetime
+
+
+class UnassignedBookingRead(BookingRead):
+    """Unassigned inbound booking with nested attachment metadata for review & assignment."""
+
+    attachments: list[AttachmentRead] = Field(default_factory=list)
+
+
+class AssignBookingRequest(BaseModel):
+    """Payload to assign an unassigned inbound booking to a trip."""
+
+    model_config = ConfigDict(frozen=True)
+
+    trip_id: uuid.UUID
+    confirm: bool = True

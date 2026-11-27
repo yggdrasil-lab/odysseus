@@ -41,6 +41,18 @@ def update_booking(
     )
 
 
+@router.post("/{booking_id}/confirm", response_model=BookingRead)
+def confirm_booking(
+    trip_id: uuid.UUID,
+    booking_id: uuid.UUID,
+    db: Session = Depends(get_db),
+) -> BookingRead:
+    """Promote a draft or pending booking to confirmed."""
+    return BookingRead.model_validate(
+        booking_service.confirm_booking(db, trip_id, booking_id)
+    )
+
+
 @router.delete("/{booking_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_booking(
     trip_id: uuid.UUID,

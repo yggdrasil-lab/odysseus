@@ -11,7 +11,7 @@ from app.domain.bookings import (
     validate_booking_status,
     validate_booking_type,
 )
-from app.domain.errors import DomainConflictError
+from app.domain.errors import DomainConflictError, DomainValidationError
 from app.models import Booking, BookingSegment
 from app.schemas import BookingCreate, BookingSegmentCreate, BookingUpdate
 from app.services.ownership import (
@@ -129,6 +129,19 @@ def update_booking(
         db.rollback()
         raise DomainConflictError("Duplicate booking source_email_message_id.") from exc
     db.refresh(booking)
+    return require_booking_with_segments(db, booking.id)
+
+
+def confirm_booking(db: Session, trip_id: uuid.UUID, booking_id: uuid.UUID) -> Booking:
+    """Promote a draft or pending booking to confirmed."""
+    require_trip(db, trip_id)
+    booking = require_booking_for_trip(db, trip_id, booking_id)
+    if booking.status == "cancelled":
+        raise DomainValidationError("Cancelled bookings cannot be confirmed.")
+    if booking.status != "confirmed":
+        booking.status = "confirmed"
+        db.commit()
+        db.refresh(booking)
     return require_booking_with_segments(db, booking.id)
 
 

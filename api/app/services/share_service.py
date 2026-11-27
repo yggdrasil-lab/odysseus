@@ -12,7 +12,7 @@ from app.domain.sharing import (
     generate_share_token,
     validate_share_token_active,
 )
-from app.models import Attachment, ShareToken
+from app.models import Attachment, Booking, ShareToken
 from app.schemas import SharedTripViewRead, ShareTokenCreate, ShareTokenUpdate
 from app.services import trip_service
 from app.services.ownership import (
@@ -171,4 +171,8 @@ def get_shared_attachment(
     attachment = db.get(Attachment, attachment_id)
     if attachment is None or attachment.trip_id != token_row.trip_id:
         raise DomainNotFoundError(f"Attachment {attachment_id} not found.")
+    if attachment.booking_id is not None:
+        booking = db.get(Booking, attachment.booking_id)
+        if booking is not None and booking.status == "draft":
+            raise DomainNotFoundError(f"Attachment {attachment_id} not found.")
     return attachment

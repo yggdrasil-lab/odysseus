@@ -54,7 +54,20 @@ function buildMinimalPmtilesBuffer(): Buffer {
   return buf
 }
 
-async function mockOdysseusApi(page: Page, onApiRequest?: (path: string) => void) {
+interface MockApiOptions {
+  onApiRequest?: (path: string) => void
+  seedInbound?: boolean
+}
+
+async function mockOdysseusApi(
+  page: Page,
+  onApiRequestOrOptions?: ((path: string) => void) | MockApiOptions,
+) {
+  const opts: MockApiOptions =
+    typeof onApiRequestOrOptions === 'function'
+      ? { onApiRequest: onApiRequestOrOptions }
+      : (onApiRequestOrOptions ?? {})
+  const onApiRequest = opts.onApiRequest
   const pdfBuffer = buildSyntheticPdfBuffer()
   const pmtilesBuffer = buildMinimalPmtilesBuffer()
 
@@ -288,7 +301,99 @@ async function mockOdysseusApi(page: Page, onApiRequest?: (path: string) => void
       created_at: '2027-01-01T00:00:00Z',
       updated_at: '2027-01-01T00:00:00Z',
     },
+    ...(opts.seedInbound
+      ? [
+          {
+            id: '99999999-9999-4999-8999-999999999903',
+            trip_id: trip.id,
+            booking_type: 'transport',
+            status: 'draft',
+            title: 'Harbor Ferry Auto-Matched Draft',
+            provider: 'Bluebridge Ferry',
+            confirmation_code: 'DRFT88',
+            quoted_cost: '185.00',
+            quoted_currency: 'NZD',
+            source_reference: 'iris-email-300',
+            source_email_message_id: '<iris-draft@ferry.example>',
+            raw_email_payload: {
+              from_address: 'Bluebridge <bookings@bluebridge.example>',
+              subject: 'Ferry Confirmation DRFT88',
+              excerpt: 'Departing 12 Jan 2027 from Wellington.',
+            },
+            notes: 'From: bookings@bluebridge.example',
+            sort_order: 2,
+            segments: [],
+            created_at: '2027-01-01T00:00:00Z',
+            updated_at: '2027-01-01T00:00:00Z',
+          },
+        ]
+      : []),
   ]
+
+  const unassignedBookings: Array<Record<string, unknown>> = opts.seedInbound
+    ? [
+        {
+          id: '77777777-1111-4111-8111-111111111101',
+          trip_id: null,
+          booking_type: 'lodging',
+          status: 'draft',
+          title: 'Harbour Lodge Voucher',
+          provider: 'Harbour Lodge',
+          confirmation_code: 'IR7742',
+          quoted_cost: '420.50',
+          quoted_currency: 'SGD',
+          source_reference: 'iris-email-202',
+          source_email_message_id: '<msg-202@hotel.example>',
+          raw_email_payload: {
+            from_address: 'Harbour Lodge <reservations@harbourlodge.example>',
+            subject: 'Fwd: Harbour Lodge Voucher',
+            excerpt: 'Check-in 2027-09-10 for Alex Tan. Total SGD 420.50.',
+          },
+          notes: 'Skipped oversized attachments (>15 MB): brochure-huge.pdf',
+          sort_order: 0,
+          segments: [],
+          attachments: [
+            {
+              id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbb09',
+              trip_id: null,
+              booking_id: '77777777-1111-4111-8111-111111111101',
+              filename: 'hotel-voucher.pdf',
+              mime_type: 'application/pdf',
+              size_bytes: pdfBuffer.length,
+              sha256: 'unassignedpdfsha256',
+              extracted_text: 'Harbour Lodge IR7742',
+              created_at: '2027-01-01T00:00:00Z',
+            },
+          ],
+          created_at: '2027-01-01T00:00:00Z',
+          updated_at: '2027-01-01T00:00:00Z',
+        },
+        {
+          id: '77777777-1111-4111-8111-111111111102',
+          trip_id: null,
+          booking_type: 'activity',
+          status: 'draft',
+          title: 'Observatory Entry Pass',
+          provider: 'Skyline Tours',
+          confirmation_code: 'SKY331',
+          quoted_cost: '65.00',
+          quoted_currency: 'NZD',
+          source_reference: 'iris-email-203',
+          source_email_message_id: '<msg-203@tours.example>',
+          raw_email_payload: {
+            from_address: 'Skyline Tours <tickets@skylinetours.example>',
+            subject: 'Observatory Entry Pass',
+            excerpt: 'Admission ticket for Alex Tan.',
+          },
+          notes: null,
+          sort_order: 1,
+          segments: [],
+          attachments: [],
+          created_at: '2027-01-01T00:00:00Z',
+          updated_at: '2027-01-01T00:00:00Z',
+        },
+      ]
+    : []
 
   const attachments = [
     {
@@ -451,13 +556,15 @@ async function mockOdysseusApi(page: Page, onApiRequest?: (path: string) => void
           itinerary_items: items,
           checklists: [],
           travel_notes: [],
-          bookings: bookings.map(({ source_email_message_id: _s, ...b }) => ({
-            ...b,
-            confirmation_code: null,
-            quoted_cost: null,
-            quoted_currency: null,
-            source_reference: null,
-          })),
+          bookings: bookings
+            .filter((b) => b.status !== 'draft')
+            .map(({ source_email_message_id: _s, ...b }) => ({
+              ...b,
+              confirmation_code: null,
+              quoted_cost: null,
+              quoted_currency: null,
+              source_reference: null,
+            })),
           attachments: [],
           places,
           route_estimates: routeEstimates,
@@ -831,6 +938,66 @@ async function mockOdysseusApi(page: Page, onApiRequest?: (path: string) => void
       await route.fulfill({ status: 201, json: created })
       return
     }
+    if (path === '/bookings/unassigned' && req.method() === 'GET') {
+      await route.fulfill({ json: unassignedBookings })
+      return
+    }
+    const unassignedContentMatch = path.match(/^\/bookings\/unassigned\/([^/]+)\/attachments\/([^/]+)\/content$/)
+    if (unassignedContentMatch && req.method() === 'GET') {
+      await route.fulfill({
+        status: 200,
+        headers: {
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': 'inline; filename="hotel-voucher.pdf"',
+          'Accept-Ranges': 'bytes',
+        },
+        body: pdfBuffer,
+      })
+      return
+    }
+    const unassignedAssignMatch = path.match(/^\/bookings\/unassigned\/([^/]+)\/assign$/)
+    if (unassignedAssignMatch && req.method() === 'POST') {
+      const targetId = unassignedAssignMatch[1]
+      const body = req.postDataJSON() as { trip_id: string; confirm?: boolean }
+      const idx = unassignedBookings.findIndex((b) => b.id === targetId)
+      if (idx === -1) {
+        await route.fulfill({ status: 404, json: { detail: 'Booking not found' } })
+        return
+      }
+      const [removed] = unassignedBookings.splice(idx, 1)
+      const movedAttachments = (removed.attachments as Array<Record<string, unknown>>) ?? []
+      const { attachments: _ignored, ...bookingFields } = removed
+      const assigned = {
+        ...bookingFields,
+        trip_id: body.trip_id,
+        status: body.confirm === false ? 'draft' : 'confirmed',
+      }
+      bookings.push(assigned as (typeof bookings)[number])
+      for (const att of movedAttachments) {
+        attachments.push({ ...(att as (typeof attachments)[number]), trip_id: body.trip_id })
+      }
+      await route.fulfill({ json: assigned })
+      return
+    }
+    const unassignedDeleteMatch = path.match(/^\/bookings\/unassigned\/([^/]+)$/)
+    if (unassignedDeleteMatch && req.method() === 'DELETE') {
+      const targetId = unassignedDeleteMatch[1]
+      const idx = unassignedBookings.findIndex((b) => b.id === targetId)
+      if (idx >= 0) unassignedBookings.splice(idx, 1)
+      await route.fulfill({ status: 204, body: '' })
+      return
+    }
+    const confirmMatch = path.match(/^\/trips\/[^/]+\/bookings\/([^/]+)\/confirm$/)
+    if (confirmMatch && req.method() === 'POST') {
+      const target = bookings.find((b) => b.id === confirmMatch[1])
+      if (!target) {
+        await route.fulfill({ status: 404, json: { detail: 'Booking not found' } })
+        return
+      }
+      target.status = 'confirmed'
+      await route.fulfill({ json: target })
+      return
+    }
     await route.fulfill({ status: 200, json: {} })
   })
 }
@@ -1113,6 +1280,82 @@ for (const platform of MOBILE_PLATFORMS) {
       expect(apiPaths.some((p) => p.startsWith('/trips'))).toBe(false)
       await page.waitForTimeout(300)
       await page.screenshot({ path: `screenshots/${platform.name}/07-share-companion.png` })
+    })
+  })
+}
+
+test.describe('Ticket 10 - Inbound Email Bookings & Draft Review', () => {
+  test('reviews unassigned Iris inbox, views PDF, assigns & confirms, and confirms trip draft on desktop', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await mockOdysseusApi(page, { seedInbound: true })
+    await page.goto('/')
+
+    const desktop = page.getByTestId('desktop-workspace')
+    const inbox = desktop.getByTestId('inbound-bookings-inbox')
+    await expect(inbox).toBeVisible()
+    await expect(inbox).toContainText('Inbound Bookings Inbox (2)')
+    await expect(inbox).toContainText('Harbour Lodge Voucher')
+    await expect(inbox).toContainText('IR7742')
+
+    await inbox.getByRole('button', { name: 'View' }).first().click()
+    const pdfModal = page.getByTestId('pdf-viewer-modal')
+    await expect(pdfModal).toBeVisible()
+    await expect(pdfModal.getByText('Page 1 / 1')).toBeVisible()
+    await page.getByRole('button', { name: 'Close dialog' }).click()
+
+    await assertNoHorizontalOverflow(page)
+    await page.waitForTimeout(250)
+    await page.screenshot({ path: 'screenshots/desktop/10-inbound-inbox.png' })
+
+    const firstCard = inbox.getByTestId('inbound-booking-card-77777777-1111-4111-8111-111111111101')
+    await firstCard.getByRole('button', { name: 'Assign & Confirm' }).click()
+    await expect(inbox).toContainText('Inbound Bookings Inbox (1)')
+    await expect(desktop.getByTestId('booking-card-77777777-1111-4111-8111-111111111101')).toBeVisible()
+
+    const secondCard = inbox.getByTestId('inbound-booking-card-77777777-1111-4111-8111-111111111102')
+    await secondCard.getByRole('button', { name: 'Dismiss' }).click()
+    await expect(inbox).toHaveCount(0)
+
+    const draftCard = desktop.getByTestId('booking-card-99999999-9999-4999-8999-999999999903')
+    await expect(draftCard).toContainText('From Iris')
+    await expect(draftCard).toContainText('DRFT88')
+    await draftCard.getByRole('button', { name: 'Confirm' }).click()
+    await expect(draftCard.getByRole('button', { name: 'Confirm' })).toHaveCount(0)
+    await expect(draftCard).toContainText('confirmed')
+  })
+})
+
+for (const platform of MOBILE_PLATFORMS) {
+  test.describe(`Ticket 10 Mobile - ${platform.name.toUpperCase()}`, () => {
+    test.use({ ...platform.options })
+
+    test(`reviews inbound inbox and confirms draft on ${platform.name}`, async ({ page }) => {
+      await mockOdysseusApi(page, { seedInbound: true })
+      await page.goto('/')
+
+      const bottomNav = page.getByRole('navigation', { name: 'Main Mobile Navigation' })
+      const mobile = page.getByTestId('mobile-workspace')
+      await bottomNav.getByRole('button', { name: 'Bookings' }).click()
+
+      const inbox = mobile.getByTestId('inbound-bookings-inbox')
+      await expect(inbox).toBeVisible()
+      await assertMinTouchHeight(inbox.getByRole('button', { name: 'Assign & Confirm' }).first())
+      await assertMinTouchHeight(inbox.getByRole('button', { name: 'Dismiss' }).first())
+      await assertNoHorizontalOverflow(page)
+      await page.waitForTimeout(250)
+      await page.screenshot({ path: `screenshots/${platform.name}/10-inbound-inbox.png`, fullPage: true })
+
+      await inbox
+        .getByTestId('inbound-booking-card-77777777-1111-4111-8111-111111111101')
+        .getByRole('button', { name: 'Assign & Confirm' })
+        .click()
+      await expect(mobile.getByTestId('booking-card-77777777-1111-4111-8111-111111111101')).toBeVisible()
+
+      const draftCard = mobile.getByTestId('booking-card-99999999-9999-4999-8999-999999999903')
+      await assertMinTouchHeight(draftCard.getByRole('button', { name: 'Confirm' }))
+      await draftCard.getByRole('button', { name: 'Confirm' }).click()
+      await expect(draftCard.getByRole('button', { name: 'Confirm' })).toHaveCount(0)
+      await assertNoHorizontalOverflow(page)
     })
   })
 }

@@ -185,11 +185,21 @@ export interface Booking {
   quoted_currency: string | null
   source_reference: string | null
   source_email_message_id: string | null
+  raw_email_payload?: Record<string, unknown> | null
   notes: string | null
   sort_order: number
   segments: BookingSegment[]
   created_at: string
   updated_at: string
+}
+
+export interface UnassignedBooking extends Booking {
+  attachments: Attachment[]
+}
+
+export interface AssignBookingPayload {
+  trip_id: string
+  confirm?: boolean
 }
 
 export interface BookingCreatePayload {
@@ -220,7 +230,7 @@ export interface BookingUpdatePayload {
 
 export interface Attachment {
   id: string
-  trip_id: string
+  trip_id: string | null
   booking_id: string | null
   filename: string
   mime_type: string

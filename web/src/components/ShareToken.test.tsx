@@ -195,7 +195,13 @@ function makeMockAdapter(overrides?: Partial<OdysseusApiAdapter>): OdysseusApiAd
     deleteNote: noop,
     createBooking: noop,
     updateBooking: noop,
+    confirmBooking: noop,
     deleteBooking: noop,
+    listUnassignedBookings: vi.fn().mockResolvedValue([]),
+    assignUnassignedBooking: noop,
+    deleteUnassignedBooking: noop,
+    unassignedAttachmentContentUrl: (bookingId: string, attachmentId: string) =>
+      `/api/bookings/unassigned/${bookingId}/attachments/${attachmentId}/content`,
     uploadAttachment: noop,
     deleteAttachment: noop,
     attachmentContentUrl: () => '',
