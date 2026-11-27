@@ -6,13 +6,16 @@ from fastapi.responses import JSONResponse
 from app.config import Settings, settings
 from app.domain.errors import (
     DomainConflictError,
+    DomainGoneError,
     DomainNotFoundError,
     DomainPayloadTooLargeError,
     DomainRangeNotSatisfiableError,
+    DomainRateLimitError,
     DomainUpstreamError,
     DomainValidationError,
 )
-from app.middleware import McpAuthMiddleware, NoCacheMiddleware
+from app.domain.rate_limit import InMemoryRateLimiter
+from app.middleware import McpAuthMiddleware, NoCacheMiddleware, ShareSecurityHeadersMiddleware
 from app.routers import (
     attachments,
     bookings,
@@ -23,6 +26,7 @@ from app.routers import (
     notes,
     places,
     routes,
+    sharing,
     trips,
 )
 
@@ -84,12 +88,28 @@ def _register_domain_handlers(application: FastAPI) -> None:
             content={"detail": str(exc)},
         )
 
+    @application.exception_handler(DomainGoneError)
+    async def _handle_gone(_request: Request, exc: DomainGoneError) -> JSONResponse:
+        return JSONResponse(
+            status_code=status.HTTP_410_GONE,
+            content={"detail": str(exc)},
+        )
+
+    @application.exception_handler(DomainRateLimitError)
+    async def _handle_rate_limit(_request: Request, exc: DomainRateLimitError) -> JSONResponse:
+        return JSONResponse(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            content={"detail": str(exc)},
+            headers={"Retry-After": str(exc.retry_after)},
+        )
+
 
 def create_app(app_settings: Settings | None = None) -> FastAPI:
     """Build and configure the Odysseus FastAPI application."""
     resolved_settings = app_settings or settings
     application = FastAPI(title="Odysseus API", version="0.1.0")
     application.state.settings = resolved_settings
+    application.state.share_rate_limiter = InMemoryRateLimiter(limit=60, window_seconds=60)
     _register_domain_handlers(application)
     application.include_router(health.router)
     application.include_router(trips.router)
@@ -101,12 +121,15 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
     application.include_router(places.router)
     application.include_router(routes.router)
     application.include_router(mappacks.router)
+    application.include_router(sharing.author_router)
+    application.include_router(sharing.public_router)
     application.include_router(mcp_router)
     application.add_middleware(
         McpAuthMiddleware,
         settings_provider=lambda: resolved_settings,
     )
     application.add_middleware(NoCacheMiddleware)
+    application.add_middleware(ShareSecurityHeadersMiddleware)
     return application
 
 

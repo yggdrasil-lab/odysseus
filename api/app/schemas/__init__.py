@@ -51,6 +51,16 @@ from app.schemas.planning import (
     TravelNoteUpdate,
     TripWorkspaceRead,
 )
+from app.schemas.sharing import (
+    SharedAttachmentRead,
+    SharedBookingRead,
+    SharedTripSummaryRead,
+    SharedTripViewRead,
+    SharedVisibilityRead,
+    ShareTokenCreate,
+    ShareTokenRead,
+    ShareTokenUpdate,
+)
 from app.schemas.trips import (
     DayCreate,
     DayRead,
@@ -109,6 +119,14 @@ __all__ = [
     "RouteEstimateRead",
     "RouteEstimateUpdate",
     "RouteSource",
+    "ShareTokenCreate",
+    "ShareTokenRead",
+    "ShareTokenUpdate",
+    "SharedAttachmentRead",
+    "SharedBookingRead",
+    "SharedTripSummaryRead",
+    "SharedTripViewRead",
+    "SharedVisibilityRead",
     "TravelMode",
     "TravelNoteCreate",
     "TravelNoteRead",

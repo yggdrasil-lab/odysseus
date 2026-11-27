@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.domain.attachments import MAX_ATTACHMENT_BYTES, etag_matches, parse_byte_range
 from app.domain.errors import DomainPayloadTooLargeError
+from app.models import Attachment
 from app.schemas import AttachmentRead
 from app.services import attachment_service
 
@@ -21,6 +22,42 @@ def _content_headers(filename: str, sha256_hex: str) -> dict[str, str]:
         "Accept-Ranges": "bytes",
         "Content-Disposition": f'inline; filename="{filename}"',
     }
+
+
+def build_attachment_response(
+    attachment: Attachment,
+    if_none_match: str | None,
+    range_header: str | None,
+) -> Response:
+    """Build 200/206/304 byte-range response for an attachment payload."""
+    headers = _content_headers(attachment.filename, attachment.sha256)
+    if etag_matches(if_none_match, attachment.sha256):
+        return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers=headers)
+
+    payload = attachment.content_bytes
+    total_size = len(payload)
+    if range_header:
+        start, end = parse_byte_range(range_header, total_size)
+        chunk = payload[start : end + 1]
+        range_headers = {
+            **headers,
+            "Content-Range": f"bytes {start}-{end}/{total_size}",
+            "Content-Length": str(len(chunk)),
+        }
+        return Response(
+            content=chunk,
+            status_code=status.HTTP_206_PARTIAL_CONTENT,
+            media_type=attachment.mime_type,
+            headers=range_headers,
+        )
+
+    full_headers = {**headers, "Content-Length": str(total_size)}
+    return Response(
+        content=payload,
+        status_code=status.HTTP_200_OK,
+        media_type=attachment.mime_type,
+        headers=full_headers,
+    )
 
 
 @router.get("", response_model=list[AttachmentRead])
@@ -67,35 +104,7 @@ def get_attachment_content(
 ) -> Response:
     """Stream attachment bytes with ETag/304, Accept-Ranges, 206, and inline disposition."""
     attachment = attachment_service.get_attachment_content(db, trip_id, attachment_id)
-    headers = _content_headers(attachment.filename, attachment.sha256)
-
-    if etag_matches(if_none_match, attachment.sha256):
-        return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers=headers)
-
-    payload = attachment.content_bytes
-    total_size = len(payload)
-    if range_header:
-        start, end = parse_byte_range(range_header, total_size)
-        chunk = payload[start : end + 1]
-        range_headers = {
-            **headers,
-            "Content-Range": f"bytes {start}-{end}/{total_size}",
-            "Content-Length": str(len(chunk)),
-        }
-        return Response(
-            content=chunk,
-            status_code=status.HTTP_206_PARTIAL_CONTENT,
-            media_type=attachment.mime_type,
-            headers=range_headers,
-        )
-
-    full_headers = {**headers, "Content-Length": str(total_size)}
-    return Response(
-        content=payload,
-        status_code=status.HTTP_200_OK,
-        media_type=attachment.mime_type,
-        headers=full_headers,
-    )
+    return build_attachment_response(attachment, if_none_match, range_header)
 
 
 @router.delete("/{attachment_id}", status_code=status.HTTP_204_NO_CONTENT)

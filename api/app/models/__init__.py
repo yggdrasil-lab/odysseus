@@ -4,6 +4,7 @@ from app.models.bookings import Attachment, Booking, BookingSegment
 from app.models.mappacks import MapPack
 from app.models.places import Place, RouteEstimate
 from app.models.planning import Checklist, ChecklistItem, ItineraryItem, TravelNote
+from app.models.sharing import ShareToken
 from app.models.trip import Day, Leg, Trip
 
 __all__ = [
@@ -18,6 +19,7 @@ __all__ = [
     "MapPack",
     "Place",
     "RouteEstimate",
+    "ShareToken",
     "TravelNote",
     "Trip",
 ]
