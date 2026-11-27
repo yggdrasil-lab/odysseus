@@ -429,7 +429,13 @@ async function mockOdysseusApi(page: Page, onApiRequest?: (path: string) => void
     onApiRequest?.(path)
 
     if (path === '/share/tok-companion-demo' && req.method() === 'GET') {
-      const { immich_album_id: _i, vault_note_path: _v, ...sharedTripBase } = trip
+      const {
+        immich_album_id: _i,
+        vault_note_path: _v,
+        chronos_sync_enabled: _cs,
+        chronos_overlay_mode: _co,
+        ...sharedTripBase
+      } = trip
       await route.fulfill({
         json: {
           visibility: {
@@ -712,6 +718,20 @@ async function assertMinTouchHeight(locator: Locator, minPx = 44) {
   expect(box?.height ?? 0).toBeGreaterThanOrEqual(minPx)
 }
 
+async function assertHeaderFitsViewport(page: Page) {
+  const viewportWidth = page.viewportSize()?.width ?? 390
+  const refreshBox = await page.getByTestId('refresh-button').boundingBox()
+  expect(refreshBox).not.toBeNull()
+  expect((refreshBox?.x ?? 0) + (refreshBox?.width ?? 0)).toBeLessThanOrEqual(viewportWidth)
+  for (const name of ['Share trip', 'Save Offline', 'New Trip']) {
+    const btn = page.getByRole('button', { name })
+    const box = await btn.boundingBox()
+    expect(box).not.toBeNull()
+    expect(box?.height ?? 0).toBeGreaterThanOrEqual(44)
+    expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(viewportWidth)
+  }
+}
+
 const MOBILE_PLATFORMS = [
   {
     name: 'ios',
@@ -817,7 +837,7 @@ test.describe('Desktop Visual Inspection - Wave 3 Bookings & MapLibre', () => {
     await expect(desktop).toBeVisible()
     await expect(page.getByText('Shared Read-Only')).toBeVisible()
     await expect(desktop.getByRole('heading', { name: 'Pacific Explorer' })).toBeVisible()
-    await expect(desktop.getByText('Pacific Air AKL to HND')).toBeVisible()
+    await expect(desktop.getByRole('heading', { name: 'Pacific Air AKL to HND' })).toBeVisible()
     await expect(desktop.getByText('ODYS99')).toHaveCount(0)
     await expect(desktop.getByText('Station Locker Memo')).toHaveCount(0)
     await expect(page.getByRole('button', { name: 'New Trip' })).toHaveCount(0)
@@ -843,6 +863,7 @@ for (const platform of MOBILE_PLATFORMS) {
       await expect(mobile).toBeVisible()
       await expect(mobile.getByTestId('day-card-2027-01-13')).toContainText('Arrival: Pacific Air AKL to HND')
       await assertNoHorizontalOverflow(page)
+      await assertHeaderFitsViewport(page)
       await assertMinTouchHeight(mobile.getByRole('button', { name: 'Add Activity' }))
       await page.screenshot({ path: `screenshots/${platform.name}/01-itinerary.png`, fullPage: true })
 

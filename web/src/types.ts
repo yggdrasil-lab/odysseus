@@ -542,8 +542,6 @@ export interface SharedTripSummary {
   end_date: string | null
   home_timezone: string
   budget_nzd: string | null
-  chronos_sync_enabled: boolean
-  chronos_overlay_mode: string
   summary: string | null
   created_at: string
   updated_at: string

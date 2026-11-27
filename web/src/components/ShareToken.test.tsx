@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('maplibre-gl/dist/maplibre-gl.css', () => ({}))
@@ -21,6 +21,7 @@ vi.mock('pdfjs-dist', () => ({
 
 import { App, parseShareTokenFromPath } from '../App'
 import { OdysseusApiError, type OdysseusApiAdapter } from '../api/client'
+import { useShareTokens } from '../hooks/useShareTokens'
 import type { ShareToken, SharedTripView, Trip } from '../types'
 import { ShareTokenModal } from './ShareTokenModal'
 
@@ -84,8 +85,6 @@ function makeSharedTripView(options?: { includeAttachments?: boolean }): SharedT
       end_date: trip.end_date,
       home_timezone: trip.home_timezone,
       budget_nzd: null,
-      chronos_sync_enabled: false,
-      chronos_overlay_mode: 'suppress_all_grid_blocks',
       summary: trip.summary,
       created_at: '',
       updated_at: '',
@@ -358,6 +357,23 @@ describe('App /share/:token Companion View', () => {
       'href',
       '/api/share/tok-demo/attachments/att-share-1/content',
     )
+  })
+
+  it('prepends rotated share token ahead of revoked original token', async () => {
+    const initialToken = makeShareToken({ id: 'tok-orig', token: 'tok-orig-secret', label: 'Original Link' })
+    const rotatedToken = makeShareToken({ id: 'tok-rot', token: 'tok-rot-secret', label: 'Original Link' })
+    const adapter = makeMockAdapter({
+      listShareTokens: vi.fn().mockResolvedValue([initialToken]),
+      rotateShareToken: vi.fn().mockResolvedValue(rotatedToken),
+    })
+
+    const { result } = renderHook(() => useShareTokens({ adapter, selectedTripId: 'trip-1', isOffline: false }))
+    await act(async () => { await result.current.loadShareTokens() })
+    await act(async () => { await result.current.rotateShareToken('tok-orig') })
+
+    expect(result.current.shareTokens.map((t) => t.id)).toEqual(['tok-rot', 'tok-orig'])
+    expect(result.current.shareTokens[0].is_active).toBe(true)
+    expect(result.current.shareTokens[1].is_active).toBe(false)
   })
 
   it('displays explicit error banners for 410 revoked, 404 not found, and 429 rate limited links', async () => {

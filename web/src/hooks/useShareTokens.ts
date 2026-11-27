@@ -70,9 +70,10 @@ function useShareTokenActions(options: {
       runMutation(async (tripId) => {
         const rotated = await adapter.rotateShareToken(tripId, tokenId)
         const nowIso = new Date().toISOString()
-        setTokens((prev) =>
-          prev.map((t) => (t.id === tokenId ? { ...t, is_active: false, revoked_at: t.revoked_at ?? nowIso } : t)).concat(rotated),
-        )
+        setTokens((prev) => [
+          rotated,
+          ...prev.map((t) => (t.id === tokenId ? { ...t, is_active: false, revoked_at: t.revoked_at ?? nowIso } : t)),
+        ])
         return rotated
       }),
     [adapter, runMutation, setTokens],

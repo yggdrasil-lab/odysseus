@@ -128,27 +128,42 @@ const AuthorHeaderActions: React.FC<{
   onOpenOffline: () => void
   onOpenNewTrip: () => void
 }> = ({ hasWorkspace, isOffline, isSavedOffline, onOpenShare, onOpenOffline, onOpenNewTrip }) => (
-  <div className="flex items-center gap-1.5">
+  <div className="flex items-center gap-1 sm:gap-1.5">
     {hasWorkspace && (
       <>
-        <Button variant="outline" size="sm" disabled={isOffline} className="min-h-[38px]" icon={<Share2 className="w-3.5 h-3.5" />} onClick={onOpenShare}>
-          Share
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={isOffline}
+          aria-label="Share trip"
+          className="min-h-[44px] sm:min-h-[38px] min-w-[44px] sm:min-w-0 px-2.5 sm:px-3 gap-0 sm:gap-1.5"
+          icon={<Share2 className="w-3.5 h-3.5" />}
+          onClick={onOpenShare}
+        >
+          <span className="hidden sm:inline">Share</span>
         </Button>
         <Button
           variant={isSavedOffline ? 'secondary' : 'outline'}
           size="sm"
-          className="min-h-[38px]"
+          aria-label={isSavedOffline ? 'Saved Offline' : 'Save Offline'}
+          className="min-h-[44px] sm:min-h-[38px] min-w-[44px] sm:min-w-0 px-2.5 sm:px-3 gap-0 sm:gap-1.5"
           icon={isSavedOffline ? <HardDriveDownload className="w-3.5 h-3.5 text-emerald-400" /> : <DownloadCloud className="w-3.5 h-3.5" />}
           onClick={onOpenOffline}
         >
           <span className="hidden sm:inline">{isSavedOffline ? 'Saved Offline' : 'Save Offline'}</span>
-          <span className="sm:hidden">{isSavedOffline ? 'Saved' : 'Offline'}</span>
         </Button>
       </>
     )}
-    <Button variant="brand" size="sm" disabled={isOffline} className="min-h-[38px]" icon={<Plus className="w-3.5 h-3.5" />} onClick={onOpenNewTrip}>
+    <Button
+      variant="brand"
+      size="sm"
+      disabled={isOffline}
+      aria-label="New Trip"
+      className="min-h-[44px] sm:min-h-[38px] min-w-[44px] sm:min-w-0 px-2.5 sm:px-3 gap-0 sm:gap-1.5"
+      icon={<Plus className="w-3.5 h-3.5" />}
+      onClick={onOpenNewTrip}
+    >
       <span className="hidden sm:inline">New Trip</span>
-      <span className="sm:hidden">New</span>
     </Button>
   </div>
 )
