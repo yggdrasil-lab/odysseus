@@ -120,6 +120,39 @@ const AppModalsHost: React.FC<{
   )
 }
 
+const AuthorHeaderActions: React.FC<{
+  hasWorkspace: boolean
+  isOffline: boolean
+  isSavedOffline: boolean
+  onOpenShare: () => void
+  onOpenOffline: () => void
+  onOpenNewTrip: () => void
+}> = ({ hasWorkspace, isOffline, isSavedOffline, onOpenShare, onOpenOffline, onOpenNewTrip }) => (
+  <div className="flex items-center gap-1.5">
+    {hasWorkspace && (
+      <>
+        <Button variant="outline" size="sm" disabled={isOffline} className="min-h-[38px]" icon={<Share2 className="w-3.5 h-3.5" />} onClick={onOpenShare}>
+          Share
+        </Button>
+        <Button
+          variant={isSavedOffline ? 'secondary' : 'outline'}
+          size="sm"
+          className="min-h-[38px]"
+          icon={isSavedOffline ? <HardDriveDownload className="w-3.5 h-3.5 text-emerald-400" /> : <DownloadCloud className="w-3.5 h-3.5" />}
+          onClick={onOpenOffline}
+        >
+          <span className="hidden sm:inline">{isSavedOffline ? 'Saved Offline' : 'Save Offline'}</span>
+          <span className="sm:hidden">{isSavedOffline ? 'Saved' : 'Offline'}</span>
+        </Button>
+      </>
+    )}
+    <Button variant="brand" size="sm" disabled={isOffline} className="min-h-[38px]" icon={<Plus className="w-3.5 h-3.5" />} onClick={onOpenNewTrip}>
+      <span className="hidden sm:inline">New Trip</span>
+      <span className="sm:hidden">New</span>
+    </Button>
+  </div>
+)
+
 const AuthorWorkspaceApp: React.FC<{
   adapter: OdysseusApiAdapter
   offlineStorage?: OfflineStorageAdapter
@@ -127,7 +160,6 @@ const AuthorWorkspaceApp: React.FC<{
   const state = useOdysseusWorkspace(adapter, offlineStorage)
   const ui = useShellUiState()
   const workspace = state.workspace
-  const isSavedOffline = Boolean(state.offlineSummary)
 
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground pb-24 lg:pb-8">
@@ -136,36 +168,10 @@ const AuthorWorkspaceApp: React.FC<{
         subtitle={workspace ? workspace.trip.title : 'Aegean Travel Planner'}
         isRefreshing={state.isRefreshing} onRefresh={() => void state.refresh()}
         actions={
-          <div className="flex items-center gap-1.5">
-            {workspace && (
-              <>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={state.isOffline}
-                  className="min-h-[38px]"
-                  icon={<Share2 className="w-3.5 h-3.5" />}
-                  onClick={() => ui.setShareModalOpen(true)}
-                >
-                  Share
-                </Button>
-                <Button
-                  variant={isSavedOffline ? 'secondary' : 'outline'}
-                  size="sm"
-                  className="min-h-[38px]"
-                  icon={isSavedOffline ? <HardDriveDownload className="w-3.5 h-3.5 text-emerald-400" /> : <DownloadCloud className="w-3.5 h-3.5" />}
-                  onClick={() => ui.setOfflineModalOpen(true)}
-                >
-                  <span className="hidden sm:inline">{isSavedOffline ? 'Saved Offline' : 'Save Offline'}</span>
-                  <span className="sm:hidden">{isSavedOffline ? 'Saved' : 'Offline'}</span>
-                </Button>
-              </>
-            )}
-            <Button variant="brand" size="sm" disabled={state.isOffline} className="min-h-[38px]" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => ui.setTripModalOpen(true)}>
-              <span className="hidden sm:inline">New Trip</span>
-              <span className="sm:hidden">New</span>
-            </Button>
-          </div>
+          <AuthorHeaderActions
+            hasWorkspace={Boolean(workspace)} isOffline={state.isOffline} isSavedOffline={Boolean(state.offlineSummary)}
+            onOpenShare={() => ui.setShareModalOpen(true)} onOpenOffline={() => ui.setOfflineModalOpen(true)} onOpenNewTrip={() => ui.setTripModalOpen(true)}
+          />
         }
       />
       <main className="flex-1 w-full max-w-[1440px] mx-auto px-3 sm:px-6 lg:px-8 pt-4 space-y-4">

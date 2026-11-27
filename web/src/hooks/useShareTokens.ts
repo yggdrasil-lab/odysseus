@@ -14,6 +14,89 @@ function extractShareError(err: unknown): string {
   return err instanceof Error ? err.message : 'Share link operation failed.'
 }
 
+function useShareTokenRunner(
+  selectedTripId: string | null,
+  isOffline: boolean,
+  setError: (msg: string | null) => void,
+) {
+  return useCallback(
+    async <T,>(fn: (tripId: string) => Promise<T>): Promise<T> => {
+      if (isOffline) {
+        const msg = 'Offline Read-Only mode is active. Reconnect to manage share links.'
+        setError(msg)
+        throw new Error(msg)
+      }
+      if (!selectedTripId) {
+        throw new Error('Select a trip before managing share links.')
+      }
+      setError(null)
+      try {
+        return await fn(selectedTripId)
+      } catch (err: unknown) {
+        setError(extractShareError(err))
+        throw err
+      }
+    },
+    [isOffline, selectedTripId, setError],
+  )
+}
+
+function useShareTokenActions(options: {
+  adapter: OdysseusApiAdapter
+  runMutation: <T>(fn: (tripId: string) => Promise<T>) => Promise<T>
+  setTokens: React.Dispatch<React.SetStateAction<ShareToken[]>>
+}) {
+  const { adapter, runMutation, setTokens } = options
+  const createShareToken = useCallback(
+    (payload: ShareTokenCreatePayload) =>
+      runMutation(async (tripId) => {
+        const created = await adapter.createShareToken(tripId, payload)
+        setTokens((prev) => [created, ...prev])
+        return created
+      }),
+    [adapter, runMutation, setTokens],
+  )
+  const updateShareToken = useCallback(
+    (tokenId: string, payload: ShareTokenUpdatePayload) =>
+      runMutation(async (tripId) => {
+        const updated = await adapter.updateShareToken(tripId, tokenId, payload)
+        setTokens((prev) => prev.map((t) => (t.id === tokenId ? updated : t)))
+        return updated
+      }),
+    [adapter, runMutation, setTokens],
+  )
+  const rotateShareToken = useCallback(
+    (tokenId: string) =>
+      runMutation(async (tripId) => {
+        const rotated = await adapter.rotateShareToken(tripId, tokenId)
+        const nowIso = new Date().toISOString()
+        setTokens((prev) =>
+          prev.map((t) => (t.id === tokenId ? { ...t, is_active: false, revoked_at: t.revoked_at ?? nowIso } : t)).concat(rotated),
+        )
+        return rotated
+      }),
+    [adapter, runMutation, setTokens],
+  )
+  const revokeShareToken = useCallback(
+    (tokenId: string) =>
+      runMutation(async (tripId) => {
+        const revoked = await adapter.revokeShareToken(tripId, tokenId)
+        setTokens((prev) => prev.map((t) => (t.id === tokenId ? revoked : t)))
+        return revoked
+      }),
+    [adapter, runMutation, setTokens],
+  )
+  const deleteShareToken = useCallback(
+    (tokenId: string) =>
+      runMutation(async (tripId) => {
+        await adapter.deleteShareToken(tripId, tokenId)
+        setTokens((prev) => prev.filter((t) => t.id !== tokenId))
+      }),
+    [adapter, runMutation, setTokens],
+  )
+  return { createShareToken, updateShareToken, rotateShareToken, revokeShareToken, deleteShareToken }
+}
+
 export function useShareTokens({ adapter, selectedTripId, isOffline }: UseShareTokensOptions) {
   const [shareTokens, setShareTokens] = useState<ShareToken[]>([])
   const [shareTokensLoading, setShareTokensLoading] = useState(false)
@@ -41,87 +124,8 @@ export function useShareTokens({ adapter, selectedTripId, isOffline }: UseShareT
     }
   }, [adapter, isOffline, selectedTripId])
 
-  const runTokenMutation = useCallback(
-    async <T,>(fn: (tripId: string) => Promise<T>): Promise<T> => {
-      if (isOffline) {
-        const msg = 'Offline Read-Only mode is active. Reconnect to manage share links.'
-        setShareTokensError(msg)
-        throw new Error(msg)
-      }
-      if (!selectedTripId) {
-        throw new Error('Select a trip before managing share links.')
-      }
-      setShareTokensError(null)
-      try {
-        return await fn(selectedTripId)
-      } catch (err: unknown) {
-        setShareTokensError(extractShareError(err))
-        throw err
-      }
-    },
-    [isOffline, selectedTripId],
-  )
+  const runMutation = useShareTokenRunner(selectedTripId, isOffline, setShareTokensError)
+  const actions = useShareTokenActions({ adapter, runMutation, setTokens: setShareTokens })
 
-  const createShareToken = useCallback(
-    (payload: ShareTokenCreatePayload) =>
-      runTokenMutation(async (tripId) => {
-        const created = await adapter.createShareToken(tripId, payload)
-        setShareTokens((prev) => [created, ...prev])
-        return created
-      }),
-    [adapter, runTokenMutation],
-  )
-
-  const updateShareToken = useCallback(
-    (tokenId: string, payload: ShareTokenUpdatePayload) =>
-      runTokenMutation(async (tripId) => {
-        const updated = await adapter.updateShareToken(tripId, tokenId, payload)
-        setShareTokens((prev) => prev.map((t) => (t.id === tokenId ? updated : t)))
-        return updated
-      }),
-    [adapter, runTokenMutation],
-  )
-
-  const rotateShareToken = useCallback(
-    (tokenId: string) =>
-      runTokenMutation(async (tripId) => {
-        const rotated = await adapter.rotateShareToken(tripId, tokenId)
-        setShareTokens((prev) =>
-          prev.map((t) => (t.id === tokenId ? { ...t, is_active: false, revoked_at: t.revoked_at ?? new Date().toISOString() } : t)).concat(rotated),
-        )
-        return rotated
-      }),
-    [adapter, runTokenMutation],
-  )
-
-  const revokeShareToken = useCallback(
-    (tokenId: string) =>
-      runTokenMutation(async (tripId) => {
-        const revoked = await adapter.revokeShareToken(tripId, tokenId)
-        setShareTokens((prev) => prev.map((t) => (t.id === tokenId ? revoked : t)))
-        return revoked
-      }),
-    [adapter, runTokenMutation],
-  )
-
-  const deleteShareToken = useCallback(
-    (tokenId: string) =>
-      runTokenMutation(async (tripId) => {
-        await adapter.deleteShareToken(tripId, tokenId)
-        setShareTokens((prev) => prev.filter((t) => t.id !== tokenId))
-      }),
-    [adapter, runTokenMutation],
-  )
-
-  return {
-    shareTokens,
-    shareTokensLoading,
-    shareTokensError,
-    loadShareTokens,
-    createShareToken,
-    updateShareToken,
-    rotateShareToken,
-    revokeShareToken,
-    deleteShareToken,
-  }
+  return { shareTokens, shareTokensLoading, shareTokensError, loadShareTokens, ...actions }
 }

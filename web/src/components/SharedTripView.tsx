@@ -68,10 +68,7 @@ function useSharedTripLoader(token: string, adapter: OdysseusApiAdapter) {
       } catch (err: unknown) {
         if (!signal?.aborted) setError(classifyShareError(err))
       } finally {
-        if (!signal?.aborted) {
-          setLoading(false)
-          setRefreshing(false)
-        }
+        if (!signal?.aborted) { setLoading(false); setRefreshing(false) }
       }
     },
     [adapter, token],
@@ -86,7 +83,7 @@ function useSharedTripLoader(token: string, adapter: OdysseusApiAdapter) {
   return { data, loading, refreshing, error, reload: () => void load(true) }
 }
 
-function buildSharedSections(options: {
+interface SharedSectionsOptions {
   data: SharedTripViewData
   mapScope: MapScope
   mapLegId: string
@@ -95,92 +92,90 @@ function buildSharedSections(options: {
   onChangeMapLegId: (id: string) => void
   onChangeMapDayId: (id: string) => void
   onViewAttachment: (att: SharedAttachment) => void
-}) {
+}
+
+function buildTimelineAndBookings(data: SharedTripViewData, onViewAttachment: (att: SharedAttachment) => void) {
+  const timelineNode = (
+    <TripDocumentTimeline
+      trips={[data.trip]} trip={data.trip} legs={data.legs} days={data.days}
+      items={data.itinerary_items} bookings={data.bookings} places={data.places}
+      readOnly companionMode
+      onSelectTrip={() => {}} onOpenNewTrip={() => {}} onOpenNewLeg={() => {}} onOpenNewItem={() => {}}
+      onToggleItemDone={NOOP_ASYNC} onMoveItemDay={NOOP_ASYNC} onDeleteItem={NOOP_ASYNC}
+    />
+  )
+  const hiddenNote = !data.visibility.include_attachments && data.attachments.length === 0 ? 'Attachments hidden by trip owner' : undefined
+  const bookingsNode = (
+    <BookingsHubSection
+      bookings={data.bookings} attachments={data.attachments} readOnly companionMode attachmentsHiddenNote={hiddenNote}
+      onOpenNewBooking={() => {}} onEditBooking={() => {}} onDeleteBooking={NOOP_ASYNC}
+      onUploadAttachment={NOOP_ASYNC} onDeleteAttachment={NOOP_ASYNC}
+      onViewAttachment={(att) => onViewAttachment(att as SharedAttachment)}
+    />
+  )
+  return { timelineNode, bookingsNode }
+}
+
+function buildListsAndMap(options: SharedSectionsOptions) {
   const { data } = options
   const showChecklists = data.visibility.include_checklists
   const showNotes = data.travel_notes.length > 0
-  const showListsSection = showChecklists || showNotes
-
-  const timelineNode = (
-    <TripDocumentTimeline
-      trips={[data.trip]}
-      trip={data.trip}
-      legs={data.legs}
-      days={data.days}
-      items={data.itinerary_items}
-      bookings={data.bookings}
-      places={data.places}
-      readOnly
-      companionMode
-      onSelectTrip={() => {}}
-      onOpenNewTrip={() => {}}
-      onOpenNewLeg={() => {}}
-      onOpenNewItem={() => {}}
-      onToggleItemDone={NOOP_ASYNC}
-      onMoveItemDay={NOOP_ASYNC}
-      onDeleteItem={NOOP_ASYNC}
-    />
-  )
-
-  const bookingsNode = (
-    <BookingsHubSection
-      bookings={data.bookings}
-      attachments={data.attachments}
-      readOnly
-      companionMode
-      attachmentsHiddenNote={!data.visibility.include_attachments && data.attachments.length === 0 ? 'Attachments hidden by trip owner' : undefined}
-      onOpenNewBooking={() => {}}
-      onEditBooking={() => {}}
-      onDeleteBooking={NOOP_ASYNC}
-      onUploadAttachment={NOOP_ASYNC}
-      onDeleteAttachment={NOOP_ASYNC}
-      onViewAttachment={(att) => options.onViewAttachment(att as SharedAttachment)}
-    />
-  )
-
-  const listsNode = showListsSection ? (
+  const listsNode = showChecklists || showNotes ? (
     <ChecklistsAndNotesSection
-      checklists={data.checklists}
-      notes={data.travel_notes}
-      legs={data.legs}
-      readOnly
-      companionMode
-      hideChecklists={!showChecklists}
-      hideNotes={!showNotes}
-      onOpenNewChecklist={() => {}}
-      onAddChecklistItem={NOOP_ASYNC}
-      onToggleChecklistItem={NOOP_ASYNC}
-      onDeleteChecklistItem={NOOP_ASYNC}
-      onOpenNewNote={() => {}}
-      onDeleteNote={NOOP_ASYNC}
+      checklists={data.checklists} notes={data.travel_notes} legs={data.legs}
+      readOnly companionMode hideChecklists={!showChecklists} hideNotes={!showNotes}
+      onOpenNewChecklist={() => {}} onAddChecklistItem={NOOP_ASYNC} onToggleChecklistItem={NOOP_ASYNC}
+      onDeleteChecklistItem={NOOP_ASYNC} onOpenNewNote={() => {}} onDeleteNote={NOOP_ASYNC}
     />
   ) : null
-
   const mapNode = (
     <MapLibrePanel
-      legs={data.legs}
-      days={data.days}
-      items={data.itinerary_items}
-      places={data.places}
-      routeEstimates={data.route_estimates}
-      scope={options.mapScope}
-      onChangeScope={options.onChangeMapScope}
-      selectedLegId={options.mapLegId}
-      onChangeLegId={options.onChangeMapLegId}
-      selectedDayId={options.mapDayId}
-      onChangeDayId={options.onChangeMapDayId}
-      readOnly
-      companionMode
-      isOffline={false}
-      onOpenAddPlace={() => {}}
-      onEditPlace={() => {}}
-      onDeletePlace={NOOP_ASYNC}
+      legs={data.legs} days={data.days} items={data.itinerary_items} places={data.places}
+      routeEstimates={data.route_estimates} scope={options.mapScope} onChangeScope={options.onChangeMapScope}
+      selectedLegId={options.mapLegId} onChangeLegId={options.onChangeMapLegId}
+      selectedDayId={options.mapDayId} onChangeDayId={options.onChangeMapDayId}
+      readOnly companionMode isOffline={false}
+      onOpenAddPlace={() => {}} onEditPlace={() => {}} onDeletePlace={NOOP_ASYNC}
       onComputeDayRoutes={async () => ({ day_id: '', routes: [], fallback_used: false, warning: null })}
       onUpdateRouteEstimate={NOOP_ASYNC}
     />
   )
+  return { listsNode, mapNode, showChecklists, showNotes }
+}
 
-  return { timelineNode, bookingsNode, listsNode, mapNode, showChecklists, showNotes }
+const SharedWorkspaceContent: React.FC<SharedSectionsOptions & {
+  mobileTab: SharedTab
+  onJumpToLeg: (legId: string) => void
+}> = (props) => {
+  const { data, mobileTab } = props
+  const { timelineNode, bookingsNode } = buildTimelineAndBookings(data, props.onViewAttachment)
+  const { listsNode, mapNode, showChecklists, showNotes } = buildListsAndMap(props)
+  return (
+    <>
+      <div data-testid="desktop-shared-workspace" className="hidden lg:grid lg:grid-cols-[210px_minmax(0,1fr)_42%] lg:gap-5 lg:items-start">
+        <LeftJumpRail
+          legs={data.legs} bookingCount={data.bookings.length} placeCount={data.places.length}
+          backlogCount={data.itinerary_items.filter((i) => i.day_id === null).length}
+          checklistCount={data.checklists.length} noteCount={data.travel_notes.length}
+          hideBudget hideChecklists={!showChecklists} hideNotes={!showNotes} onJumpToLeg={props.onJumpToLeg}
+        />
+        <div className="space-y-4 min-w-0">
+          {timelineNode}
+          {bookingsNode}
+          {listsNode}
+        </div>
+        {mapNode}
+      </div>
+      <div data-testid="mobile-shared-workspace" className="lg:hidden space-y-4">
+        {mobileTab === 'itinerary' && timelineNode}
+        {mobileTab === 'map' && mapNode}
+        {mobileTab === 'bookings' && bookingsNode}
+        {mobileTab === 'lists' && (listsNode ?? (
+          <EmptyState title="Checklists & notes hidden" description="The trip owner did not include checklists or travel notes on this share link." />
+        ))}
+      </div>
+    </>
+  )
 }
 
 export const SharedTripView: React.FC<SharedTripViewProps> = ({ token, adapter }) => {
@@ -191,28 +186,11 @@ export const SharedTripView: React.FC<SharedTripViewProps> = ({ token, adapter }
   const [mapDayId, setMapDayId] = useState('')
   const [viewingAttachment, setViewingAttachment] = useState<SharedAttachment | null>(null)
 
-  const sections = data
-    ? buildSharedSections({
-        data,
-        mapScope,
-        mapLegId: mapLegId || data.legs[0]?.id || '',
-        mapDayId: mapDayId || data.days[0]?.id || '',
-        onChangeMapScope: setMapScope,
-        onChangeMapLegId: setMapLegId,
-        onChangeMapDayId: setMapDayId,
-        onViewAttachment: setViewingAttachment,
-      })
-    : null
-
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground pb-24 lg:pb-8">
       <AppHeader
-        variant="brand"
-        brandIcon={<Compass className="w-4 h-4" />}
-        title="Odysseus"
-        subtitle={data ? data.trip.title : 'Shared Trip Companion'}
-        isRefreshing={refreshing}
-        onRefresh={reload}
+        variant="brand" brandIcon={<Compass className="w-4 h-4" />} title="Odysseus"
+        subtitle={data ? data.trip.title : 'Shared Trip Companion'} isRefreshing={refreshing} onRefresh={reload}
         actions={<StatusBadge label="Shared Read-Only" variant="info" size="xs" />}
       />
       <main className="flex-1 w-full max-w-[1440px] mx-auto px-3 sm:px-6 lg:px-8 pt-4 space-y-4">
@@ -222,42 +200,17 @@ export const SharedTripView: React.FC<SharedTripViewProps> = ({ token, adapter }
           </AlertBanner>
         )}
         {loading && <LoadingState label="Loading shared trip..." variant="brand" />}
-        {data && sections && (
-          <>
-            <div data-testid="desktop-shared-workspace" className="hidden lg:grid lg:grid-cols-[210px_minmax(0,1fr)_42%] lg:gap-5 lg:items-start">
-              <LeftJumpRail
-                legs={data.legs}
-                bookingCount={data.bookings.length}
-                placeCount={data.places.length}
-                backlogCount={data.itinerary_items.filter((i) => i.day_id === null).length}
-                checklistCount={data.checklists.length}
-                noteCount={data.travel_notes.length}
-                hideBudget
-                hideChecklists={!sections.showChecklists}
-                hideNotes={!sections.showNotes}
-                onJumpToLeg={(legId) => { setMapLegId(legId); setMapScope('leg') }}
-              />
-              <div className="space-y-4 min-w-0">
-                {sections.timelineNode}
-                {sections.bookingsNode}
-                {sections.listsNode}
-              </div>
-              {sections.mapNode}
-            </div>
-            <div data-testid="mobile-shared-workspace" className="lg:hidden space-y-4">
-              {mobileTab === 'itinerary' && sections.timelineNode}
-              {mobileTab === 'map' && sections.mapNode}
-              {mobileTab === 'bookings' && sections.bookingsNode}
-              {mobileTab === 'lists' && (sections.listsNode ?? (
-                <EmptyState title="Checklists & notes hidden" description="The trip owner did not include checklists or travel notes on this share link." />
-              ))}
-            </div>
-          </>
+        {data && (
+          <SharedWorkspaceContent
+            data={data} mobileTab={mobileTab} mapScope={mapScope}
+            mapLegId={mapLegId || data.legs[0]?.id || ''} mapDayId={mapDayId || data.days[0]?.id || ''}
+            onChangeMapScope={setMapScope} onChangeMapLegId={setMapLegId}
+            onChangeMapDayId={setMapDayId} onViewAttachment={setViewingAttachment}
+            onJumpToLeg={(legId) => { setMapLegId(legId); setMapScope('leg') }}
+          />
         )}
       </main>
-      {data && (
-        <BottomNav hideOnDesktop variant="brand" activeTab={mobileTab} onChangeTab={(id) => setMobileTab(id as SharedTab)} tabs={SHARED_TABS} />
-      )}
+      {data && <BottomNav hideOnDesktop variant="brand" activeTab={mobileTab} onChangeTab={(id) => setMobileTab(id as SharedTab)} tabs={SHARED_TABS} />}
       <PdfViewerModal
         attachment={viewingAttachment}
         contentUrl={viewingAttachment ? adapter.sharedAttachmentContentUrl(token, viewingAttachment.id) : ''}
