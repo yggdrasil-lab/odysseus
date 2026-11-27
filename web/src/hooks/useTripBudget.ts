@@ -17,12 +17,11 @@ export interface UseTripBudgetResult {
   refreshBudget: () => Promise<void>
 }
 
-export function useTripBudget(
+function useBudgetLoader(
   adapter: Pick<OdysseusApiAdapter, 'getTripBudget'>,
   tripId: string | null,
   isOffline: boolean,
-  workspaceVersion?: string | number,
-): UseTripBudgetResult {
+) {
   const [budgetSummary, setBudgetSummary] = useState<TripBudgetSummary | null>(null)
   const [isLoading, setIsLoading] = useState<boolean>(false)
   const [budgetError, setBudgetError] = useState<string | null>(null)
@@ -34,15 +33,9 @@ export function useTripBudget(
       setBudgetError(null)
       try {
         const result = await adapter.getTripBudget(tripId, signal)
-        if (!signal?.aborted) {
-          setBudgetSummary(result)
-          setBudgetError(null)
-        }
+        if (!signal?.aborted) { setBudgetSummary(result); setBudgetError(null) }
       } catch (err: unknown) {
-        if (!signal?.aborted) {
-          setBudgetSummary(null)
-          setBudgetError(extractBudgetError(err))
-        }
+        if (!signal?.aborted) { setBudgetSummary(null); setBudgetError(extractBudgetError(err)) }
       } finally {
         if (!signal?.aborted) setIsLoading(false)
       }
@@ -50,25 +43,26 @@ export function useTripBudget(
     [adapter, isOffline, tripId],
   )
 
+  return { budgetSummary, isLoading, budgetError, setBudgetSummary, setIsLoading, setBudgetError, loadBudget }
+}
+
+export function useTripBudget(
+  adapter: Pick<OdysseusApiAdapter, 'getTripBudget'>,
+  tripId: string | null,
+  isOffline: boolean,
+  workspaceVersion?: string | number,
+): UseTripBudgetResult {
+  const state = useBudgetLoader(adapter, tripId, isOffline)
+  const { setBudgetSummary, setBudgetError, setIsLoading, loadBudget } = state
+
   useEffect(() => {
-    if (!tripId) {
-      setBudgetSummary(null)
-      setBudgetError(null)
-      setIsLoading(false)
-      return
-    }
-    if (isOffline) {
-      setIsLoading(false)
-      return
-    }
+    if (!tripId) { setBudgetSummary(null); setBudgetError(null); setIsLoading(false); return }
+    if (isOffline) { setIsLoading(false); return }
     const controller = new AbortController()
     void loadBudget(controller.signal)
     return () => controller.abort()
-  }, [isOffline, loadBudget, tripId, workspaceVersion])
+  }, [isOffline, loadBudget, setBudgetError, setBudgetSummary, setIsLoading, tripId, workspaceVersion])
 
-  const refreshBudget = useCallback(async () => {
-    await loadBudget()
-  }, [loadBudget])
-
-  return { budgetSummary, isLoading, budgetError, refreshBudget }
+  const refreshBudget = useCallback(async () => { await loadBudget() }, [loadBudget])
+  return { budgetSummary: state.budgetSummary, isLoading: state.isLoading, budgetError: state.budgetError, refreshBudget }
 }
