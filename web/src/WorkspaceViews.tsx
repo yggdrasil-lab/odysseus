@@ -3,6 +3,7 @@ import React from 'react'
 import { BookingsHubSection } from './components/BookingsHubSection'
 import { BudgetSection } from './components/BudgetSection'
 import { ChecklistsAndNotesSection } from './components/ChecklistsAndNotesSection'
+import { InboundBookingsInbox } from './components/InboundBookingsInbox'
 import { LeftJumpRail } from './components/LeftJumpRail'
 import { MapLibrePanel } from './components/MapLibrePanel'
 import { TripDocumentTimeline } from './components/TripDocumentTimeline'
@@ -58,12 +59,24 @@ function buildBookingsAndListsNodes(props: WorkspaceViewsProps) {
   const { workspace, state } = props
   const readOnly = state.isOffline
   const bookingsNode = (
-    <BookingsHubSection
-      bookings={workspace.bookings} attachments={workspace.attachments} readOnly={readOnly}
-      onOpenNewBooking={props.onOpenNewBooking} onEditBooking={props.onEditBooking}
-      onDeleteBooking={state.deleteBooking} onUploadAttachment={state.uploadAttachment}
-      onDeleteAttachment={state.deleteAttachment} onViewAttachment={props.onViewAttachment}
-    />
+    <div className="space-y-4">
+      <InboundBookingsInbox
+        bookings={state.unassignedBookings}
+        trips={state.trips}
+        selectedTripId={state.selectedTripId}
+        readOnly={readOnly}
+        onAssign={state.assignUnassignedBooking}
+        onDismiss={state.deleteUnassignedBooking}
+        onViewAttachment={props.onViewAttachment}
+      />
+      <BookingsHubSection
+        bookings={workspace.bookings} attachments={workspace.attachments} readOnly={readOnly}
+        onOpenNewBooking={props.onOpenNewBooking} onEditBooking={props.onEditBooking}
+        onConfirmBooking={state.confirmBooking}
+        onDeleteBooking={state.deleteBooking} onUploadAttachment={state.uploadAttachment}
+        onDeleteAttachment={state.deleteAttachment} onViewAttachment={props.onViewAttachment}
+      />
+    </div>
   )
   const listsNode = (
     <ChecklistsAndNotesSection

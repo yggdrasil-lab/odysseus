@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ApiRoutingError, SessionExpiredError, type OdysseusApiAdapter } from '../api/client'
 import { BrowserOfflineStorageAdapter, type OfflineStorageAdapter } from '../offline/storage'
 import type {
+  AssignBookingPayload,
   ChronosPreview,
   ChronosSyncRequest,
   ChronosSyncResponse,
@@ -10,6 +11,7 @@ import type {
   TravelMode,
   Trip,
   TripWorkspace,
+  UnassignedBooking,
 } from '../types'
 import { useOfflineTripSync } from './useOfflineTripSync'
 import { useShareTokens } from './useShareTokens'
@@ -63,19 +65,25 @@ async function hydrateFromStorage(
 }
 
 async function fetchInitialWorkspace(adapter: OdysseusApiAdapter, signal?: AbortSignal) {
-  const tripList = await adapter.listTrips(signal)
+  const [tripList, unassignedBookings] = await Promise.all([
+    adapter.listTrips(signal),
+    adapter.listUnassignedBookings(signal),
+  ])
   if (signal?.aborted) return null
-  if (tripList.length === 0) return { trips: tripList, selectedTripId: null, workspace: null }
+  if (tripList.length === 0) {
+    return { trips: tripList, selectedTripId: null, workspace: null, unassignedBookings }
+  }
   const targetId = tripList[0].id
   const loaded = await adapter.getWorkspace(targetId, signal)
   if (signal?.aborted) return null
-  return { trips: tripList, selectedTripId: targetId, workspace: loaded }
+  return { trips: tripList, selectedTripId: targetId, workspace: loaded, unassignedBookings }
 }
 
 function useWorkspaceQueries(adapter: OdysseusApiAdapter, storage: OfflineStorageAdapter) {
   const [trips, setTrips] = useState<Trip[]>([])
   const [selectedTripId, setSelectedTripId] = useState<string | null>(null)
   const [workspace, setWorkspace] = useState<TripWorkspace | null>(null)
+  const [unassignedBookings, setUnassignedBookings] = useState<UnassignedBooking[]>([])
   const [workspaceVersion, setWorkspaceVersion] = useState<number>(0)
   const [isLoading, setIsLoading] = useState<boolean>(true)
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false)
@@ -86,7 +94,8 @@ function useWorkspaceQueries(adapter: OdysseusApiAdapter, storage: OfflineStorag
       const cached = await hydrateFromStorage(storage, preferredTripId)
       if (!cached) return false
       setTrips(cached.trips); setSelectedTripId(cached.selectedTripId)
-      setWorkspace(cached.workspace); setWorkspaceVersion((v) => v + 1); setLoadError(null)
+      setWorkspace(cached.workspace); setUnassignedBookings([])
+      setWorkspaceVersion((v) => v + 1); setLoadError(null)
       return true
     },
     [storage],
@@ -105,7 +114,8 @@ function useWorkspaceQueries(adapter: OdysseusApiAdapter, storage: OfflineStorag
         const loaded = await fetchInitialWorkspace(adapter, signal)
         if (loaded) {
           setTrips(loaded.trips); setSelectedTripId(loaded.selectedTripId)
-          setWorkspace(loaded.workspace); setWorkspaceVersion((v) => v + 1)
+          setWorkspace(loaded.workspace); setUnassignedBookings(loaded.unassignedBookings)
+          setWorkspaceVersion((v) => v + 1)
         }
       } catch (err: unknown) {
         if (signal?.aborted || (readNavigatorOffline() && (await applyOfflineFallback()))) return
@@ -125,8 +135,13 @@ function useWorkspaceQueries(adapter: OdysseusApiAdapter, storage: OfflineStorag
           if (!(await applyOfflineFallback(tripId))) setLoadError({ kind: 'api', message: 'Offline copy not found for selected trip.' })
           return
         }
-        const [tripList, loaded] = await Promise.all([adapter.listTrips(), adapter.getWorkspace(tripId)])
-        setTrips(tripList); setWorkspace(loaded); setWorkspaceVersion((v) => v + 1)
+        const [tripList, loaded, unassigned] = await Promise.all([
+          adapter.listTrips(),
+          adapter.getWorkspace(tripId),
+          adapter.listUnassignedBookings(),
+        ])
+        setTrips(tripList); setWorkspace(loaded); setUnassignedBookings(unassigned)
+        setWorkspaceVersion((v) => v + 1)
       } catch (err: unknown) {
         if (readNavigatorOffline() && (await applyOfflineFallback(tripId))) return
         setLoadError(classifyError(err))
@@ -138,7 +153,7 @@ function useWorkspaceQueries(adapter: OdysseusApiAdapter, storage: OfflineStorag
   )
 
   return {
-    trips, selectedTripId, setSelectedTripId, workspace, workspaceVersion,
+    trips, selectedTripId, setSelectedTripId, workspace, unassignedBookings, workspaceVersion,
     isLoading, isRefreshing, loadError, hydrateTrips, reloadWorkspace,
   }
 }
@@ -186,7 +201,18 @@ function useWave3WorkspaceQueries(options: {
     (attachmentId: string) => (selectedTripId ? adapter.attachmentContentUrl(selectedTripId, attachmentId) : ''),
     [adapter, selectedTripId],
   )
-  return { searchPlaces, resolvePlaceUrl, computeDayRoutes, attachmentContentUrl }
+  const unassignedAttachmentContentUrl = useCallback(
+    (bookingId: string, attachmentId: string) =>
+      adapter.unassignedAttachmentContentUrl(bookingId, attachmentId),
+    [adapter],
+  )
+  return {
+    searchPlaces,
+    resolvePlaceUrl,
+    computeDayRoutes,
+    attachmentContentUrl,
+    unassignedAttachmentContentUrl,
+  }
 }
 
 function useGuardedWorkspaceMutations(options: {
@@ -235,7 +261,47 @@ function useGuardedWorkspaceMutations(options: {
     async (payload: Parameters<typeof actions.createTrip>[0]) => { assertOnline(); return actions.createTrip(payload) },
     [actions, assertOnline],
   )
-  return { ...actions, createTrip: guardedCreateTrip }
+  return { ...actions, createTrip: guardedCreateTrip, assertOnline }
+}
+
+function useInboundInboxActions(options: {
+  adapter: OdysseusApiAdapter
+  assertOnline: () => void
+  selectedTripId: string | null
+  hydrateTrips: () => Promise<void>
+  reloadWorkspace: (tripId: string) => Promise<void>
+  setActionError: (err: WorkspaceErrorState | null) => void
+}) {
+  const { adapter, assertOnline, selectedTripId, hydrateTrips, reloadWorkspace, setActionError } = options
+
+  const runInboundAction = useCallback(
+    async (fn: () => Promise<void>) => {
+      assertOnline()
+      setActionError(null)
+      try {
+        await fn()
+        if (selectedTripId) await reloadWorkspace(selectedTripId)
+        else await hydrateTrips()
+      } catch (err: unknown) {
+        setActionError(classifyError(err))
+        throw err
+      }
+    },
+    [assertOnline, hydrateTrips, reloadWorkspace, selectedTripId, setActionError],
+  )
+
+  const assignUnassignedBooking = useCallback(
+    (bookingId: string, payload: AssignBookingPayload) =>
+      runInboundAction(() => adapter.assignUnassignedBooking(bookingId, payload).then(() => undefined)),
+    [adapter, runInboundAction],
+  )
+
+  const deleteUnassignedBooking = useCallback(
+    (bookingId: string) => runInboundAction(() => adapter.deleteUnassignedBooking(bookingId)),
+    [adapter, runInboundAction],
+  )
+
+  return { assignUnassignedBooking, deleteUnassignedBooking }
 }
 
 function useChronosSyncActions(options: {
@@ -298,6 +364,14 @@ export function useOdysseusWorkspace(adapter: OdysseusApiAdapter, storage?: Offl
   const chronos = useChronosSyncActions({
     adapter, selectedTripId: queries.selectedTripId, isOffline, reloadWorkspace: queries.reloadWorkspace,
   })
+  const inbound = useInboundInboxActions({
+    adapter,
+    assertOnline: mutations.assertOnline,
+    selectedTripId: queries.selectedTripId,
+    hydrateTrips: queries.hydrateTrips,
+    reloadWorkspace: queries.reloadWorkspace,
+    setActionError,
+  })
 
   const selectTrip = useCallback(
     async (tripId: string) => { queries.setSelectedTripId(tripId); setActionError(null); await queries.reloadWorkspace(tripId) },
@@ -310,9 +384,10 @@ export function useOdysseusWorkspace(adapter: OdysseusApiAdapter, storage?: Offl
 
   return {
     trips: queries.trips, selectedTripId: queries.selectedTripId, workspace: queries.workspace,
+    unassignedBookings: queries.unassignedBookings,
     isLoading: queries.isLoading, isRefreshing: queries.isRefreshing, loadError: queries.loadError,
     actionError, isOffline, clearActionError: () => setActionError(null), selectTrip, refresh,
     budgetSummary: budget.budgetSummary, budgetLoading: budget.isLoading, budgetError: budget.budgetError, refreshBudget: budget.refreshBudget,
-    ...wave3, ...mutations, ...offline, ...shareTokens, ...chronos,
+    ...wave3, ...mutations, ...offline, ...shareTokens, ...chronos, ...inbound,
   }
 }

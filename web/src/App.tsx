@@ -12,6 +12,7 @@ import {
 
 import { OdysseusHttpAdapter, type OdysseusApiAdapter } from './api/client'
 import { WorkspaceViews } from './WorkspaceViews'
+import { InboundBookingsInbox } from './components/InboundBookingsInbox'
 import { IosInstallBanner } from './components/IosInstallBanner'
 import { SharedTripView } from './components/SharedTripView'
 import { WorkspaceModals } from './components/WorkspaceModals'
@@ -82,6 +83,18 @@ function useShellUiState() {
   }
 }
 
+function resolveViewingAttachmentUrl(
+  attachment: Attachment | SharedAttachment | null,
+  state: ReturnType<typeof useOdysseusWorkspace>,
+): string {
+  if (!attachment) return ''
+  if ('content_url' in attachment) return attachment.content_url
+  if (attachment.trip_id === null && attachment.booking_id) {
+    return state.unassignedAttachmentContentUrl(attachment.booking_id, attachment.id)
+  }
+  return state.attachmentContentUrl(attachment.id)
+}
+
 const AppModalsHost: React.FC<{
   ui: ReturnType<typeof useShellUiState>
   state: ReturnType<typeof useOdysseusWorkspace>
@@ -99,7 +112,7 @@ const AppModalsHost: React.FC<{
       bookingModalOpen={ui.bookingModalOpen} editingBooking={ui.editingBooking}
       onCloseBookingModal={() => { ui.setBookingModalOpen(false); ui.setEditingBooking(null) }}
       onCreateBooking={state.createBooking} onUpdateBooking={state.updateBooking}
-      viewingAttachment={ui.viewingAttachment} attachmentContentUrl={ui.viewingAttachment ? state.attachmentContentUrl(ui.viewingAttachment.id) : ''}
+      viewingAttachment={ui.viewingAttachment} attachmentContentUrl={resolveViewingAttachmentUrl(ui.viewingAttachment, state)}
       isOffline={state.isOffline} offlineBlobLoader={state.loadOfflineAttachmentBlob}
       onCloseAttachmentViewer={() => ui.setViewingAttachment(null)}
       placeModalOpen={ui.placeModalOpen} editingPlace={ui.editingPlace} initialPlaceCoords={ui.initialPlaceCoords}
@@ -172,6 +185,30 @@ const AuthorHeaderActions: React.FC<{
   </div>
 )
 
+const EmptyTripsView: React.FC<{
+  state: ReturnType<typeof useOdysseusWorkspace>
+  onOpenNewTrip: () => void
+  onViewAttachment: (attachment: Attachment | SharedAttachment) => void
+}> = ({ state, onOpenNewTrip, onViewAttachment }) => (
+  <div className="space-y-4">
+    <InboundBookingsInbox
+      bookings={state.unassignedBookings}
+      trips={state.trips}
+      selectedTripId={state.selectedTripId}
+      readOnly={state.isOffline}
+      onAssign={state.assignUnassignedBooking}
+      onDismiss={state.deleteUnassignedBooking}
+      onViewAttachment={onViewAttachment}
+    />
+    <EmptyState
+      title="Plan your first voyage"
+      description="Create a trip with flexible planning dates or locked travel dates to begin building legs, days, and checklists."
+      icon={<Compass className="w-8 h-8 text-accent" />}
+      action={<Button variant="brand" size="md" disabled={state.isOffline} onClick={onOpenNewTrip}>Create First Trip</Button>}
+    />
+  </div>
+)
+
 const AuthorWorkspaceApp: React.FC<{
   adapter: OdysseusApiAdapter
   offlineStorage?: OfflineStorageAdapter
@@ -203,12 +240,7 @@ const AuthorWorkspaceApp: React.FC<{
         <WorkspaceErrorDisplay error={state.loadError ?? state.actionError} onRetry={() => void state.refresh()} />
         {state.isLoading && <LoadingState label="Loading trip workspace..." variant="brand" />}
         {!state.isLoading && !workspace && !state.loadError && (
-          <EmptyState
-            title="Plan your first voyage"
-            description="Create a trip with flexible planning dates or locked travel dates to begin building legs, days, and checklists."
-            icon={<Compass className="w-8 h-8 text-accent" />}
-            action={<Button variant="brand" size="md" disabled={state.isOffline} onClick={() => ui.setTripModalOpen(true)}>Create First Trip</Button>}
-          />
+          <EmptyTripsView state={state} onOpenNewTrip={() => ui.setTripModalOpen(true)} onViewAttachment={(att) => ui.setViewingAttachment(att)} />
         )}
         {workspace && (
           <WorkspaceViews
@@ -218,8 +250,7 @@ const AuthorWorkspaceApp: React.FC<{
             mapDayId={ui.mapDayId || workspace.days[0]?.id || ''} onChangeMapDayId={ui.setMapDayId}
             onOpenNewTrip={() => ui.setTripModalOpen(true)} onOpenNewLeg={() => ui.setLegModalOpen(true)}
             onOpenNewItem={(dayId) => ui.setItemModalDayId(dayId)} onOpenChronosSync={() => ui.setChronosModalOpen(true)}
-            onOpenNewChecklist={() => ui.setChecklistModalOpen(true)}
-            onOpenNewNote={() => ui.setNoteModalOpen(true)}
+            onOpenNewChecklist={() => ui.setChecklistModalOpen(true)} onOpenNewNote={() => ui.setNoteModalOpen(true)}
             onOpenNewBooking={() => { ui.setEditingBooking(null); ui.setBookingModalOpen(true) }}
             onEditBooking={(b) => { ui.setEditingBooking(b); ui.setBookingModalOpen(true) }}
             onViewAttachment={(att) => ui.setViewingAttachment(att)}

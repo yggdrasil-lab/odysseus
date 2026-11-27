@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react'
-import { Eye, FileText, Pencil, Plane, Plus, Ticket, Trash2, Upload } from 'lucide-react'
+import { CheckCircle2, Eye, FileText, Pencil, Plane, Plus, Ticket, Trash2, Upload } from 'lucide-react'
 import {
   AlertBanner,
   Button,
@@ -51,6 +51,7 @@ export interface BookingsHubSectionProps {
   attachmentsHiddenNote?: string
   onOpenNewBooking: () => void
   onEditBooking: (booking: Booking) => void
+  onConfirmBooking?: (bookingId: string) => Promise<void>
   onDeleteBooking: (bookingId: string) => Promise<void>
   onUploadAttachment: (file: File, bookingId?: string | null) => Promise<void>
   onDeleteAttachment: (attachmentId: string) => Promise<void>
@@ -154,40 +155,66 @@ const BookingUploadControl: React.FC<{
   )
 }
 
+const BookingCardActions: React.FC<{
+  booking: DisplayBooking
+  readOnly: boolean
+  onEdit: (booking: Booking) => void
+  onConfirm?: (bookingId: string) => Promise<void>
+  onDelete: (bookingId: string) => Promise<void>
+}> = ({ booking, readOnly, onEdit, onConfirm, onDelete }) => {
+  const [confirming, setConfirming] = useState(false)
+  const handleConfirm = async () => {
+    if (!onConfirm) return
+    setConfirming(true)
+    try {
+      await onConfirm(booking.id)
+    } catch {
+      // Surfacing via workspace actionError banner.
+    } finally {
+      setConfirming(false)
+    }
+  }
+  return (
+    <div className="flex items-center gap-1.5 shrink-0">
+      {booking.status === 'draft' && onConfirm && (
+        <Button variant="brand" size="xs" disabled={readOnly || confirming} loading={confirming} className="min-h-[44px] sm:min-h-[34px]" icon={<CheckCircle2 className="w-3.5 h-3.5" />} onClick={() => void handleConfirm()}>Confirm</Button>
+      )}
+      <Button variant="outline" size="xs" disabled={readOnly} className="min-h-[44px] sm:min-h-[34px]" icon={<Pencil className="w-3.5 h-3.5" />} onClick={() => onEdit(booking as Booking)}>Edit</Button>
+      <Button variant="danger" size="xs" disabled={readOnly} aria-label={`Delete booking ${booking.title}`} className="min-h-[44px] sm:min-h-[34px]" icon={<Trash2 className="w-3.5 h-3.5" />} onClick={() => void onDelete(booking.id).catch(() => {})} />
+    </div>
+  )
+}
+
 const BookingCardHeader: React.FC<{
   booking: DisplayBooking
   readOnly: boolean
   companionMode: boolean
   onEdit: (booking: Booking) => void
+  onConfirm?: (bookingId: string) => Promise<void>
   onDelete: (bookingId: string) => Promise<void>
-}> = ({ booking, readOnly, companionMode, onEdit, onDelete }) => (
-  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
-    <div className="space-y-1 min-w-0">
-      <div className="flex flex-wrap items-center gap-1.5">
-        <h4 className="text-sm font-bold text-foreground">{booking.title}</h4>
-        <StatusBadge label={booking.booking_type} variant="info" size="xs" showDot={false} />
-        <StatusBadge label={booking.status} variant={BOOKING_STATUS_VARIANT[booking.status]} size="xs" />
-        {Boolean(booking.confirmation_code) && (
-          <span className="px-2 py-0.5 rounded-md bg-card border border-border font-mono text-[11px] font-semibold text-accent">
-            {booking.confirmation_code}
-          </span>
-        )}
+}> = ({ booking, readOnly, companionMode, onEdit, onConfirm, onDelete }) => {
+  const isFromIris = !companionMode && 'source_email_message_id' in booking && Boolean(booking.source_email_message_id)
+  return (
+    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
+      <div className="space-y-1 min-w-0">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <h4 className="text-sm font-bold text-foreground">{booking.title}</h4>
+          <StatusBadge label={booking.booking_type} variant="info" size="xs" showDot={false} />
+          <StatusBadge label={booking.status} variant={BOOKING_STATUS_VARIANT[booking.status]} size="xs" />
+          {isFromIris && <StatusBadge label="From Iris" variant="warning" size="xs" showDot={false} />}
+          {Boolean(booking.confirmation_code) && (
+            <span className="px-2 py-0.5 rounded-md bg-card border border-border font-mono text-[11px] font-semibold text-accent">{booking.confirmation_code}</span>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted">
+          {Boolean(booking.provider) && <span>Provider: {booking.provider}</span>}
+          {Boolean(booking.quoted_cost) && <span className="font-mono text-foreground">{booking.quoted_currency ?? 'NZD'} {booking.quoted_cost}</span>}
+        </div>
       </div>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted">
-        {Boolean(booking.provider) && <span>Provider: {booking.provider}</span>}
-        {Boolean(booking.quoted_cost) && (
-          <span className="font-mono text-foreground">{booking.quoted_currency ?? 'NZD'} {booking.quoted_cost}</span>
-        )}
-      </div>
+      {!companionMode && <BookingCardActions booking={booking} readOnly={readOnly} onEdit={onEdit} onConfirm={onConfirm} onDelete={onDelete} />}
     </div>
-    {!companionMode && (
-      <div className="flex items-center gap-1.5 shrink-0">
-        <Button variant="outline" size="xs" disabled={readOnly} className="min-h-[44px] sm:min-h-[34px]" icon={<Pencil className="w-3.5 h-3.5" />} onClick={() => onEdit(booking as Booking)}>Edit</Button>
-        <Button variant="danger" size="xs" disabled={readOnly} aria-label={`Delete booking ${booking.title}`} className="min-h-[44px] sm:min-h-[34px]" icon={<Trash2 className="w-3.5 h-3.5" />} onClick={() => void onDelete(booking.id)} />
-      </div>
-    )}
-  </div>
-)
+  )
+}
 
 const BookingCard: React.FC<{
   booking: DisplayBooking
@@ -195,15 +222,16 @@ const BookingCard: React.FC<{
   readOnly: boolean
   companionMode: boolean
   onEdit: (booking: Booking) => void
+  onConfirm?: (bookingId: string) => Promise<void>
   onDelete: (bookingId: string) => Promise<void>
   onUploadAttachment: (file: File, bookingId: string) => Promise<void>
   onDeleteAttachment: (attachmentId: string) => Promise<void>
   onViewAttachment: (attachment: DisplayAttachment) => void
-}> = ({ booking, attachments, readOnly, companionMode, onEdit, onDelete, onUploadAttachment, onDeleteAttachment, onViewAttachment }) => {
+}> = ({ booking, attachments, readOnly, companionMode, onEdit, onConfirm, onDelete, onUploadAttachment, onDeleteAttachment, onViewAttachment }) => {
   const orderedSegments = [...booking.segments].sort((a, b) => a.segment_order - b.segment_order)
   return (
     <article data-testid={`booking-card-${booking.id}`} className="rounded-ui-control bg-background/60 border border-border/80 p-3.5 space-y-3">
-      <BookingCardHeader booking={booking} readOnly={readOnly} companionMode={companionMode} onEdit={onEdit} onDelete={onDelete} />
+      <BookingCardHeader booking={booking} readOnly={readOnly} companionMode={companionMode} onEdit={onEdit} onConfirm={onConfirm} onDelete={onDelete} />
       {orderedSegments.length > 0 && (
         <div className="space-y-1.5">
           {orderedSegments.map((seg) => <SegmentSummaryRow key={seg.id} segment={seg} />)}
@@ -302,6 +330,7 @@ export const BookingsHubSection: React.FC<BookingsHubSectionProps> = (props) => 
               readOnly={Boolean(props.readOnly)}
               companionMode={companionMode}
               onEdit={props.onEditBooking}
+              onConfirm={props.onConfirmBooking}
               onDelete={props.onDeleteBooking}
               onUploadAttachment={(file, id) => props.onUploadAttachment(file, id)}
               onDeleteAttachment={props.onDeleteAttachment}

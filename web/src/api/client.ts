@@ -1,6 +1,7 @@
 import { SessionExpiredError, isSessionExpiredResponse } from '@yggdrasil-lab/ui'
 
 import type {
+  AssignBookingPayload,
   Attachment,
   Booking,
   BookingCreatePayload,
@@ -41,6 +42,7 @@ import type {
   TripCreatePayload,
   TripUpdatePayload,
   TripWorkspace,
+  UnassignedBooking,
 } from '../types'
 
 export { SessionExpiredError }
@@ -110,7 +112,12 @@ export interface OdysseusApiAdapter {
   deleteNote(tripId: string, noteId: string): Promise<void>
   createBooking(tripId: string, payload: BookingCreatePayload): Promise<Booking>
   updateBooking(tripId: string, bookingId: string, payload: BookingUpdatePayload): Promise<Booking>
+  confirmBooking(tripId: string, bookingId: string): Promise<Booking>
   deleteBooking(tripId: string, bookingId: string): Promise<void>
+  listUnassignedBookings(signal?: AbortSignal): Promise<UnassignedBooking[]>
+  assignUnassignedBooking(bookingId: string, payload: AssignBookingPayload): Promise<Booking>
+  deleteUnassignedBooking(bookingId: string): Promise<void>
+  unassignedAttachmentContentUrl(bookingId: string, attachmentId: string): string
   uploadAttachment(tripId: string, file: File, bookingId?: string | null): Promise<Attachment>
   deleteAttachment(tripId: string, attachmentId: string): Promise<void>
   attachmentContentUrl(tripId: string, attachmentId: string): string
@@ -357,10 +364,37 @@ export class OdysseusHttpAdapter implements OdysseusApiAdapter {
     })
   }
 
+  confirmBooking(tripId: string, bookingId: string): Promise<Booking> {
+    return this.request<Booking>(`/trips/${tripId}/bookings/${bookingId}/confirm`, {
+      method: 'POST',
+    })
+  }
+
   deleteBooking(tripId: string, bookingId: string): Promise<void> {
     return this.request<void>(`/trips/${tripId}/bookings/${bookingId}`, {
       method: 'DELETE',
     })
+  }
+
+  listUnassignedBookings(signal?: AbortSignal): Promise<UnassignedBooking[]> {
+    return this.request<UnassignedBooking[]>('/bookings/unassigned', { signal })
+  }
+
+  assignUnassignedBooking(bookingId: string, payload: AssignBookingPayload): Promise<Booking> {
+    return this.request<Booking>(`/bookings/unassigned/${bookingId}/assign`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+  }
+
+  deleteUnassignedBooking(bookingId: string): Promise<void> {
+    return this.request<void>(`/bookings/unassigned/${bookingId}`, {
+      method: 'DELETE',
+    })
+  }
+
+  unassignedAttachmentContentUrl(bookingId: string, attachmentId: string): string {
+    return `${this.baseUrl}/bookings/unassigned/${bookingId}/attachments/${attachmentId}/content`
   }
 
   uploadAttachment(tripId: string, file: File, bookingId?: string | null): Promise<Attachment> {

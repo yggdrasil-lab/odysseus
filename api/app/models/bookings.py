@@ -2,6 +2,7 @@
 
 from datetime import datetime, timezone
 from decimal import Decimal
+from typing import Any
 import uuid
 
 from sqlalchemy import (
@@ -15,7 +16,7 @@ from sqlalchemy import (
     Text,
     text,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -54,6 +55,7 @@ class Booking(Base):
     quoted_currency: Mapped[str | None] = mapped_column(String(8), nullable=True)
     source_reference: Mapped[str | None] = mapped_column(String(255), nullable=True)
     source_email_message_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    raw_email_payload: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     created_at: Mapped[datetime] = mapped_column(
@@ -127,10 +129,10 @@ class Attachment(Base):
     __tablename__ = "attachments"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    trip_id: Mapped[uuid.UUID] = mapped_column(
+    trip_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("trips.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
         index=True,
     )
     booking_id: Mapped[uuid.UUID | None] = mapped_column(

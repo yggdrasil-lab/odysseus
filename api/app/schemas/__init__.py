@@ -1,6 +1,7 @@
 """Pydantic schemas package for Odysseus API."""
 
 from app.schemas.bookings import (
+    AssignBookingRequest,
     AttachmentRead,
     BookingCreate,
     BookingRead,
@@ -9,6 +10,7 @@ from app.schemas.bookings import (
     BookingStatus,
     BookingType,
     BookingUpdate,
+    UnassignedBookingRead,
 )
 from app.schemas.budget import (
     BudgetCategoryActualRead,
@@ -22,6 +24,11 @@ from app.schemas.chronos import (
     ChronosPreviewRead,
     ChronosSyncRequest,
     ChronosSyncResultRead,
+)
+from app.schemas.integrations import (
+    InboundEmailAttachmentPayload,
+    InboundEmailIngestResponse,
+    InboundEmailWebhookPayload,
 )
 from app.schemas.mappacks import (
     MapPackCreate,
@@ -89,6 +96,7 @@ from app.schemas.trips import (
 )
 
 __all__ = [
+    "AssignBookingRequest",
     "AttachmentRead",
     "BookingCreate",
     "BookingRead",
@@ -116,6 +124,9 @@ __all__ = [
     "DayRoutesComputeRequest",
     "DayRoutesComputeResponse",
     "DayUpdate",
+    "InboundEmailAttachmentPayload",
+    "InboundEmailIngestResponse",
+    "InboundEmailWebhookPayload",
     "ItemCategory",
     "ItemStatus",
     "ItineraryItemCreate",
@@ -160,6 +171,7 @@ __all__ = [
     "TripStatus",
     "TripUpdate",
     "TripWorkspaceRead",
+    "UnassignedBookingRead",
 ]
 
 OfflineBundleRead.model_rebuild(_types_namespace={"TripWorkspaceRead": TripWorkspaceRead})

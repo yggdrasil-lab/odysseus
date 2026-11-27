@@ -109,6 +109,7 @@ def _build_shared_attachments(
     workspace: TripWorkspaceRead,
     token_str: str,
     include_attachments: bool,
+    draft_booking_ids: set[uuid.UUID],
 ) -> list[SharedAttachmentRead]:
     if not include_attachments:
         return []
@@ -124,6 +125,7 @@ def _build_shared_attachments(
             created_at=attachment.created_at,
         )
         for attachment in workspace.attachments
+        if attachment.booking_id is None or attachment.booking_id not in draft_booking_ids
     ]
 
 
@@ -139,9 +141,13 @@ def build_shared_trip_view(
         include_checklists=token_row.include_checklists,
         include_private_notes=token_row.include_private_notes,
     )
+    draft_booking_ids = {
+        booking.id for booking in workspace.bookings if booking.status == "draft"
+    }
     bookings = [
         _build_shared_booking(booking, token_row.include_pnrs, token_row.include_costs)
         for booking in workspace.bookings
+        if booking.status != "draft"
     ]
     travel_notes = [
         note
@@ -158,7 +164,10 @@ def build_shared_trip_view(
         travel_notes=travel_notes,
         bookings=bookings,
         attachments=_build_shared_attachments(
-            workspace, token_row.token, token_row.include_attachments
+            workspace,
+            token_row.token,
+            token_row.include_attachments,
+            draft_booking_ids,
         ),
         places=workspace.places,
         route_estimates=workspace.route_estimates,

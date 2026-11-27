@@ -23,6 +23,8 @@ from app.routers import (
     checklists,
     chronos,
     health,
+    inbound_bookings,
+    integrations,
     itinerary,
     mappacks,
     notes,
@@ -119,6 +121,8 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
     application.include_router(checklists.router)
     application.include_router(notes.router)
     application.include_router(bookings.router)
+    application.include_router(inbound_bookings.router)
+    application.include_router(integrations.router)
     application.include_router(budget.router)
     application.include_router(chronos.router)
     application.include_router(attachments.router)

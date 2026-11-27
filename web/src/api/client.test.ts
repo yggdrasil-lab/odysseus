@@ -254,6 +254,77 @@ describe('OdysseusHttpAdapter fail-loud boundary', () => {
     expect(fetchMock.mock.calls[1][1]?.method).toBe('POST')
   })
 
+  it('lists, assigns, dismisses unassigned bookings, confirms trip bookings, and builds unassigned URL', async () => {
+    const sampleUnassigned = [
+      {
+        id: 'ub-1',
+        trip_id: null,
+        booking_type: 'lodging',
+        status: 'draft',
+        title: 'Harbour Lodge Voucher',
+        provider: 'Harbour Lodge',
+        confirmation_code: 'HTL552',
+        quoted_cost: '420.50',
+        quoted_currency: 'SGD',
+        source_reference: 'iris-1',
+        source_email_message_id: '<msg-1@hotel.example>',
+        raw_email_payload: { from_address: 'Harbour Lodge <bookings@harbourlodge.example>' },
+        notes: null,
+        sort_order: 0,
+        segments: [],
+        attachments: [],
+        created_at: '',
+        updated_at: '',
+      },
+    ]
+    const assignedBooking = { ...sampleUnassigned[0], trip_id: 'trip-1', status: 'confirmed' }
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(sampleUnassigned), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(assignedBooking), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ ...assignedBooking, id: 'book-2' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+
+    const adapter = new OdysseusHttpAdapter({ fetchImpl: fetchMock })
+    const listed = await adapter.listUnassignedBookings()
+    expect(listed).toHaveLength(1)
+    expect(listed[0].id).toBe('ub-1')
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/bookings/unassigned')
+
+    const assigned = await adapter.assignUnassignedBooking('ub-1', { trip_id: 'trip-1', confirm: true })
+    expect(assigned.status).toBe('confirmed')
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/bookings/unassigned/ub-1/assign')
+    expect(fetchMock.mock.calls[1][1]?.method).toBe('POST')
+
+    const confirmed = await adapter.confirmBooking('trip-1', 'book-2')
+    expect(confirmed.status).toBe('confirmed')
+    expect(fetchMock.mock.calls[2][0]).toBe('/api/trips/trip-1/bookings/book-2/confirm')
+    expect(fetchMock.mock.calls[2][1]?.method).toBe('POST')
+
+    await adapter.deleteUnassignedBooking('ub-1')
+    expect(fetchMock.mock.calls[3][0]).toBe('/api/bookings/unassigned/ub-1')
+    expect(fetchMock.mock.calls[3][1]?.method).toBe('DELETE')
+
+    expect(adapter.unassignedAttachmentContentUrl('ub-1', 'att-9')).toBe(
+      '/api/bookings/unassigned/ub-1/attachments/att-9/content',
+    )
+  })
+
   it('normalizes trip titles into valid lowercase slugs', () => {
     expect(createTripSlug('  Pacific Explorer 2027!  ')).toBe('pacific-explorer-2027')
   })

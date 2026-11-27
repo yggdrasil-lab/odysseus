@@ -53,6 +53,7 @@ function buildBookingsAndPlacesActions({ adapter, runMutation }: Pick<ActionHelp
   return {
     createBooking: (payload: BookingCreatePayload) => runMutation((id) => adapter.createBooking(id, payload).then(() => undefined)),
     updateBooking: (bookingId: string, payload: BookingUpdatePayload) => runMutation((id) => adapter.updateBooking(id, bookingId, payload).then(() => undefined)),
+    confirmBooking: (bookingId: string) => runMutation((id) => adapter.confirmBooking(id, bookingId).then(() => undefined)),
     deleteBooking: (bookingId: string) => runMutation((id) => adapter.deleteBooking(id, bookingId)),
     uploadAttachment: (file: File, bookingId?: string | null) => runMutation((id) => adapter.uploadAttachment(id, file, bookingId).then(() => undefined)),
     deleteAttachment: (attachmentId: string) => runMutation((id) => adapter.deleteAttachment(id, attachmentId)),
