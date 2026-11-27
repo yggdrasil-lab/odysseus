@@ -3,8 +3,10 @@
 from fastapi import Request
 
 from app.adapters import (
+    ChronosClientAdapter,
     GeocoderAdapter,
     GoogleUrlResolverAdapter,
+    HttpChronosClientAdapter,
     HttpPlutusClientAdapter,
     MapPackBuilderAdapter,
     OsrmRoutingAdapter,
@@ -50,6 +52,12 @@ def get_plutus_client_adapter(request: Request) -> PlutusClientAdapter:
     """Provide the configured read-only Plutus HTTP client adapter."""
     resolved = get_app_settings(request)
     return HttpPlutusClientAdapter(base_url=resolved.plutus_api_url)
+
+
+def get_chronos_client_adapter(request: Request) -> ChronosClientAdapter:
+    """Provide the configured Chronos HTTP client adapter."""
+    resolved = get_app_settings(request)
+    return HttpChronosClientAdapter(base_url=resolved.chronos_api_url)
 
 
 def get_share_rate_limiter(request: Request) -> InMemoryRateLimiter:

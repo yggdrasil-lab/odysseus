@@ -181,6 +181,8 @@ function makeMockAdapter(overrides?: Partial<OdysseusApiAdapter>): OdysseusApiAd
     updateTrip: noop,
     getWorkspace: noop,
     getTripBudget: noop,
+    getChronosPreview: noop,
+    syncTripToChronos: noop,
     createLeg: noop,
     createItineraryItem: noop,
     updateItineraryItem: noop,

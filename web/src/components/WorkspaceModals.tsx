@@ -7,6 +7,9 @@ import type {
   BookingCreatePayload,
   BookingUpdatePayload,
   ChecklistCreatePayload,
+  ChronosPreview,
+  ChronosSyncRequest,
+  ChronosSyncResponse,
   Day,
   ItineraryItemCreatePayload,
   Leg,
@@ -28,6 +31,7 @@ import type {
   TripCreatePayload,
 } from '../types'
 import { BookingModal } from './BookingModal'
+import { ChronosSyncModal } from './ChronosSyncModal'
 import { OfflineSyncModal } from './OfflineSyncModal'
 import { PdfViewerModal } from './PdfViewerModal'
 import { PlaceEntryModal } from './PlaceEntryModal'
@@ -101,6 +105,10 @@ interface WorkspaceModalsProps {
   onRotateShareToken: (tokenId: string) => Promise<ShareToken>
   onRevokeShareToken: (tokenId: string) => Promise<ShareToken>
   onDeleteShareToken: (tokenId: string) => Promise<void>
+  chronosModalOpen: boolean
+  onCloseChronosModal: () => void
+  onLoadChronosPreview: () => Promise<ChronosPreview>
+  onSyncTripToChronos: (payload: ChronosSyncRequest) => Promise<ChronosSyncResponse>
 }
 
 export const WorkspaceModals: React.FC<WorkspaceModalsProps> = (props) => (
@@ -176,6 +184,16 @@ export const WorkspaceModals: React.FC<WorkspaceModalsProps> = (props) => (
         onRotateToken={props.onRotateShareToken}
         onRevokeToken={props.onRevokeShareToken}
         onDeleteToken={props.onDeleteShareToken}
+      />
+    )}
+    {props.activeTrip && (
+      <ChronosSyncModal
+        isOpen={props.chronosModalOpen}
+        onClose={props.onCloseChronosModal}
+        trip={props.activeTrip}
+        isOffline={props.isOffline}
+        onLoadPreview={props.onLoadChronosPreview}
+        onSync={props.onSyncTripToChronos}
       />
     )}
   </>

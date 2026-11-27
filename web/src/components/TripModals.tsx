@@ -209,6 +209,38 @@ const ItemScheduleFields: React.FC<{
   </>
 )
 
+const ItemPlaceAndChronosFields: React.FC<{
+  places: Place[]
+  placeId: string
+  placeLabel: string
+  hasStartLocal: boolean
+  syncToChronos: boolean
+  onSelectPlace: (nextId: string) => void
+  onChangePlaceLabel: (v: string) => void
+  onChangeSyncToChronos: (v: boolean) => void
+}> = (p) => (
+  <>
+    {p.places.length > 0 && (
+      <FormField label="Linked Saved Place (optional)" htmlFor="item-saved-place">
+        <SelectInput
+          id="item-saved-place" variant="brand" value={p.placeId}
+          onChange={(e) => p.onSelectPlace(e.target.value)}
+          options={[{ value: '', label: 'None (free-text label only)' }, ...p.places.map((pl) => ({ value: pl.id, label: pl.name }))]}
+        />
+      </FormField>
+    )}
+    <FormField label="Place Label" htmlFor="item-place">
+      <TextInput id="item-place" variant="brand" value={p.placeLabel} onChange={(e) => p.onChangePlaceLabel(e.target.value)} placeholder="Harbor Pier 2" />
+    </FormField>
+    {p.hasStartLocal && (
+      <label htmlFor="item-sync-chronos" className="flex items-center gap-2.5 min-h-[44px] text-xs text-foreground cursor-pointer">
+        <input id="item-sync-chronos" type="checkbox" checked={p.syncToChronos} onChange={(e) => p.onChangeSyncToChronos(e.target.checked)} className="w-4 h-4 accent-sky-400" />
+        <span>Sync to Chronos (anchor commitment)</span>
+      </label>
+    )}
+  </>
+)
+
 export const CreateItemModal: React.FC<{
   isOpen: boolean
   days: Day[]
@@ -226,10 +258,11 @@ export const CreateItemModal: React.FC<{
   const [startTz, setStartTz] = useState(defaultTimezone)
   const [placeId, setPlaceId] = useState('')
   const [placeLabel, setPlaceLabel] = useState('')
+  const [syncToChronos, setSyncToChronos] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
-  useEffect(() => { setDayId(defaultDayId ?? ''); if (isOpen) setErrorMessage(null) }, [defaultDayId, isOpen])
+  useEffect(() => { setDayId(defaultDayId ?? ''); if (isOpen) { setErrorMessage(null); setSyncToChronos(false) } }, [defaultDayId, isOpen])
   useEffect(() => { setStartTz(defaultTimezone) }, [defaultTimezone])
 
   const handleSave = async (event: React.FormEvent) => {
@@ -242,11 +275,10 @@ export const CreateItemModal: React.FC<{
         day_id: dayId || null, title: title.trim(), category, status: itemStatus,
         start_local: normalized ? (normalized.length === 16 ? `${normalized}:00` : normalized) : null,
         start_tz: normalized ? startTz.trim() || defaultTimezone : null,
-        place_id: placeId || null,
-        place_label: placeLabel.trim() || null,
+        place_id: placeId || null, place_label: placeLabel.trim() || null,
+        sync_to_chronos: Boolean(normalized) && syncToChronos,
       })
-      setTitle(''); setStartLocal(''); setPlaceId(''); setPlaceLabel('')
-      onClose()
+      setTitle(''); setStartLocal(''); setPlaceId(''); setPlaceLabel(''); setSyncToChronos(false); onClose()
     } catch (err: unknown) { setErrorMessage(extractModalError(err)) } finally { setSubmitting(false) }
   }
 
@@ -261,25 +293,11 @@ export const CreateItemModal: React.FC<{
           <SelectInput id="item-day" variant="brand" value={dayId} onChange={(e) => setDayId(e.target.value)} options={[{ value: '', label: 'Unscheduled (Idea Backlog)' }, ...days.map((d) => ({ value: d.id, label: d.date }))]} />
         </FormField>
         <ItemScheduleFields category={category} itemStatus={itemStatus} startLocal={startLocal} startTz={startTz} onChangeCategory={setCategory} onChangeStatus={setItemStatus} onChangeStartLocal={setStartLocal} onChangeStartTz={setStartTz} />
-        {places.length > 0 && (
-          <FormField label="Linked Saved Place (optional)" htmlFor="item-saved-place">
-            <SelectInput
-              id="item-saved-place"
-              variant="brand"
-              value={placeId}
-              onChange={(e) => {
-                const nextId = e.target.value
-                setPlaceId(nextId)
-                const matched = places.find((p) => p.id === nextId)
-                if (matched && !placeLabel.trim()) setPlaceLabel(matched.name)
-              }}
-              options={[{ value: '', label: 'None (free-text label only)' }, ...places.map((p) => ({ value: p.id, label: p.name }))]}
-            />
-          </FormField>
-        )}
-        <FormField label="Place Label" htmlFor="item-place">
-          <TextInput id="item-place" variant="brand" value={placeLabel} onChange={(e) => setPlaceLabel(e.target.value)} placeholder="Harbor Pier 2" />
-        </FormField>
+        <ItemPlaceAndChronosFields
+          places={places} placeId={placeId} placeLabel={placeLabel} hasStartLocal={Boolean(startLocal.trim())} syncToChronos={syncToChronos}
+          onSelectPlace={(nextId) => { setPlaceId(nextId); const matched = places.find((p) => p.id === nextId); if (matched && !placeLabel.trim()) setPlaceLabel(matched.name) }}
+          onChangePlaceLabel={setPlaceLabel} onChangeSyncToChronos={setSyncToChronos}
+        />
         <ModalActions onClose={onClose} submitLabel="Save Item" submitting={submitting} />
       </form>
     </Modal>

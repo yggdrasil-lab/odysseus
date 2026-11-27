@@ -24,6 +24,10 @@ export type RouteSource = 'geodesic' | 'osrm' | 'manual'
 
 export type MapPackStatus = 'ready' | 'failed'
 
+export type ChronosOverlayMode = 'suppress_all_grid_blocks' | 'keep_work_blocks'
+
+export type ChronosNudgeMode = 'none' | 'boundary'
+
 export interface Trip {
   id: string
   title: string
@@ -36,7 +40,7 @@ export interface Trip {
   immich_album_id: string | null
   vault_note_path: string | null
   chronos_sync_enabled: boolean
-  chronos_overlay_mode: string
+  chronos_overlay_mode: ChronosOverlayMode
   summary: string | null
   created_at: string
   updated_at: string
@@ -418,6 +422,8 @@ export interface TripCreatePayload {
   end_date?: string | null
   home_timezone?: string
   budget_nzd?: number | null
+  chronos_sync_enabled?: boolean
+  chronos_overlay_mode?: ChronosOverlayMode
   summary?: string | null
 }
 
@@ -429,7 +435,50 @@ export interface TripUpdatePayload {
   end_date?: string | null
   home_timezone?: string
   budget_nzd?: string | number | null
+  chronos_sync_enabled?: boolean
+  chronos_overlay_mode?: ChronosOverlayMode
   summary?: string | null
+}
+
+export interface ChronosAnchorPreview {
+  external_ref: string
+  source_kind: 'booking_segment' | 'itinerary_item'
+  source_id: string
+  title: string
+  target_date: string
+  start_minute: number
+  end_minute: number
+  nudge_mode: ChronosNudgeMode
+  urgent_quiet_bypass: boolean
+  notes: string
+}
+
+export interface ChronosPreview {
+  trip_id: string
+  trip_slug: string
+  eligible: boolean
+  ineligible_reason: string | null
+  sync_enabled: boolean
+  overlay_mode: ChronosOverlayMode
+  confirmed_segment_count: number
+  synced_item_count: number
+  anchors: ChronosAnchorPreview[]
+}
+
+export interface ChronosSyncRequest {
+  enabled?: boolean
+  overlay_mode?: ChronosOverlayMode
+}
+
+export interface ChronosSyncResponse {
+  trip_id: string
+  trip_slug: string
+  sync_enabled: boolean
+  overlay_mode: ChronosOverlayMode
+  overlay_active: boolean
+  upserted_count: number
+  deleted_count: number
+  anchors: ChronosAnchorPreview[]
 }
 
 export interface BudgetFxRate {
@@ -512,6 +561,7 @@ export interface ItineraryItemCreatePayload {
   end_tz?: string | null
   place_label?: string | null
   place_id?: string | null
+  sync_to_chronos?: boolean
   notes?: string | null
 }
 
@@ -526,6 +576,7 @@ export interface ItineraryItemUpdatePayload {
   end_tz?: string | null
   place_label?: string | null
   place_id?: string | null
+  sync_to_chronos?: boolean
   notes?: string | null
 }
 

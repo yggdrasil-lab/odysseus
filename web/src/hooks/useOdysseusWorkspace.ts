@@ -2,7 +2,15 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { ApiRoutingError, SessionExpiredError, type OdysseusApiAdapter } from '../api/client'
 import { BrowserOfflineStorageAdapter, type OfflineStorageAdapter } from '../offline/storage'
-import type { DayRoutesComputeResponse, TravelMode, Trip, TripWorkspace } from '../types'
+import type {
+  ChronosPreview,
+  ChronosSyncRequest,
+  ChronosSyncResponse,
+  DayRoutesComputeResponse,
+  TravelMode,
+  Trip,
+  TripWorkspace,
+} from '../types'
 import { useOfflineTripSync } from './useOfflineTripSync'
 import { useShareTokens } from './useShareTokens'
 import { useTripBudget } from './useTripBudget'
@@ -230,6 +238,37 @@ function useGuardedWorkspaceMutations(options: {
   return { ...actions, createTrip: guardedCreateTrip }
 }
 
+function useChronosSyncActions(options: {
+  adapter: OdysseusApiAdapter
+  selectedTripId: string | null
+  isOffline: boolean
+  reloadWorkspace: (tripId: string) => Promise<void>
+}) {
+  const { adapter, selectedTripId, isOffline, reloadWorkspace } = options
+  const loadChronosPreview = useCallback(async (): Promise<ChronosPreview> => {
+    if (isOffline || readNavigatorOffline()) {
+      throw new Error('Offline Read-Only mode is active. Reconnect to preview Chronos sync.')
+    }
+    if (!selectedTripId) throw new Error('Select a trip before previewing Chronos sync.')
+    return adapter.getChronosPreview(selectedTripId)
+  }, [adapter, isOffline, selectedTripId])
+
+  const syncTripToChronos = useCallback(
+    async (payload?: ChronosSyncRequest): Promise<ChronosSyncResponse> => {
+      if (isOffline || readNavigatorOffline()) {
+        throw new Error('Offline Read-Only mode is active. Reconnect to sync Chronos.')
+      }
+      if (!selectedTripId) throw new Error('Select a trip before syncing to Chronos.')
+      const result = await adapter.syncTripToChronos(selectedTripId, payload)
+      await reloadWorkspace(selectedTripId)
+      return result
+    },
+    [adapter, isOffline, reloadWorkspace, selectedTripId],
+  )
+
+  return { loadChronosPreview, syncTripToChronos }
+}
+
 export function useOdysseusWorkspace(adapter: OdysseusApiAdapter, storage?: OfflineStorageAdapter) {
   const resolvedStorage = useMemo(() => storage ?? new BrowserOfflineStorageAdapter(), [storage])
   const isOffline = useOfflineStatus()
@@ -256,6 +295,9 @@ export function useOdysseusWorkspace(adapter: OdysseusApiAdapter, storage?: Offl
     adapter, selectedTripId: queries.selectedTripId, isOffline,
   })
   const budget = useTripBudget(adapter, queries.selectedTripId, isOffline, queries.workspaceVersion)
+  const chronos = useChronosSyncActions({
+    adapter, selectedTripId: queries.selectedTripId, isOffline, reloadWorkspace: queries.reloadWorkspace,
+  })
 
   const selectTrip = useCallback(
     async (tripId: string) => { queries.setSelectedTripId(tripId); setActionError(null); await queries.reloadWorkspace(tripId) },
@@ -271,6 +313,6 @@ export function useOdysseusWorkspace(adapter: OdysseusApiAdapter, storage?: Offl
     isLoading: queries.isLoading, isRefreshing: queries.isRefreshing, loadError: queries.loadError,
     actionError, isOffline, clearActionError: () => setActionError(null), selectTrip, refresh,
     budgetSummary: budget.budgetSummary, budgetLoading: budget.isLoading, budgetError: budget.budgetError, refreshBudget: budget.refreshBudget,
-    ...wave3, ...mutations, ...offline, ...shareTokens,
+    ...wave3, ...mutations, ...offline, ...shareTokens, ...chronos,
   }
 }
