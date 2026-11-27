@@ -179,7 +179,7 @@ def _register_planning_read_tools(server: MCPServer, open_session: SessionOpener
             }
 
 
-def _register_place_and_itinerary_tools(server: MCPServer, open_session: SessionOpener) -> None:
+def _register_add_place_tool(server: MCPServer, open_session: SessionOpener) -> None:
     @server.tool(
         name="odysseus_add_place",
         description="Add a validated place pin or backlog candidate to a trip.",
@@ -215,6 +215,11 @@ def _register_place_and_itinerary_tools(server: MCPServer, open_session: Session
                 created = place_service.create_place(db, parsed_trip_id, payload)
             return PlaceRead.model_validate(created).model_dump(mode="json")
 
+
+def _register_add_itinerary_item_tool(
+    server: MCPServer,
+    open_session: SessionOpener,
+) -> None:
     @server.tool(
         name="odysseus_add_itinerary_item",
         description="Add a scheduled or backlog itinerary item to a trip.",
@@ -257,7 +262,7 @@ def _register_place_and_itinerary_tools(server: MCPServer, open_session: Session
             return ItineraryItemRead.model_validate(created).model_dump(mode="json")
 
 
-def _register_note_and_checklist_tools(server: MCPServer, open_session: SessionOpener) -> None:
+def _register_add_travel_note_tool(server: MCPServer, open_session: SessionOpener) -> None:
     @server.tool(
         name="odysseus_add_travel_note",
         description="Add a travel note scoped to a trip, optional leg, or optional day.",
@@ -285,6 +290,8 @@ def _register_note_and_checklist_tools(server: MCPServer, open_session: SessionO
                 created = checklist_note_service.create_note(db, parsed_trip_id, payload)
             return TravelNoteRead.model_validate(created).model_dump(mode="json")
 
+
+def _register_upsert_checklist_tool(server: MCPServer, open_session: SessionOpener) -> None:
     @server.tool(
         name="odysseus_upsert_checklist_item",
         description="Create or toggle a checklist item by item_id or case-insensitive label.",
@@ -328,8 +335,10 @@ def build_mcp_server(open_session: SessionOpener) -> MCPServer:
     )
     _register_trip_read_tools(server, open_session)
     _register_planning_read_tools(server, open_session)
-    _register_place_and_itinerary_tools(server, open_session)
-    _register_note_and_checklist_tools(server, open_session)
+    _register_add_place_tool(server, open_session)
+    _register_add_itinerary_item_tool(server, open_session)
+    _register_add_travel_note_tool(server, open_session)
+    _register_upsert_checklist_tool(server, open_session)
     return server
 
 
