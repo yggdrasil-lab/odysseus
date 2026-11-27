@@ -328,4 +328,62 @@ describe('OdysseusHttpAdapter fail-loud boundary', () => {
   it('normalizes trip titles into valid lowercase slugs', () => {
     expect(createTripSlug('  Pacific Explorer 2027!  ')).toBe('pacific-explorer-2027')
   })
+
+  it('fetches Immich trip photos and exports Markdown with HTML routing guard', async () => {
+    const photosPayload = {
+      trip_id: 'trip-1',
+      status: 'available',
+      source: 'album',
+      message: null,
+      total_photos: 1,
+      days: [
+        {
+          day_id: 'day-1',
+          date: '2027-01-12',
+          photos: [
+            {
+              asset_id: 'asset-1',
+              original_filename: 'harbor.jpg',
+              captured_at: '2027-01-12T10:00:00Z',
+              local_date: '2027-01-12',
+              thumbnail_url: '/api/trips/trip-1/photos/asset-1/thumbnail',
+              web_url: 'https://photos.home.example/photos/asset-1',
+              thumbhash: null,
+            },
+          ],
+        },
+      ],
+      ungrouped_photos: [],
+    }
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(photosPayload), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response('---\ntype: trip-snapshot\n---\n# Pacific Explorer\n', {
+          status: 200,
+          headers: { 'content-type': 'text/markdown; charset=utf-8' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response('<html><body>SPA fallback</body></html>', {
+          status: 200,
+          headers: { 'content-type': 'text/html; charset=utf-8' },
+        }),
+      )
+
+    const adapter = new OdysseusHttpAdapter({ fetchImpl: fetchMock })
+    const photos = await adapter.getTripPhotos('trip-1')
+    expect(photos.total_photos).toBe(1)
+    expect(photos.days[0].photos[0].asset_id).toBe('asset-1')
+
+    const md = await adapter.exportTripMarkdown('trip-1')
+    expect(md).toContain('type: trip-snapshot')
+
+    await expect(adapter.exportTripMarkdown('trip-1')).rejects.toBeInstanceOf(ApiRoutingError)
+  })
 })

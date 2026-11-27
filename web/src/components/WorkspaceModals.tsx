@@ -36,6 +36,7 @@ import { OfflineSyncModal } from './OfflineSyncModal'
 import { PdfViewerModal } from './PdfViewerModal'
 import { PlaceEntryModal } from './PlaceEntryModal'
 import { ShareTokenModal } from './ShareTokenModal'
+import { TripSettingsModal } from './TripSettingsModal'
 import {
   CreateChecklistModal,
   CreateItemModal,
@@ -109,6 +110,12 @@ interface WorkspaceModalsProps {
   onCloseChronosModal: () => void
   onLoadChronosPreview: () => Promise<ChronosPreview>
   onSyncTripToChronos: (payload: ChronosSyncRequest) => Promise<ChronosSyncResponse>
+  tripSettingsModalOpen: boolean
+  onCloseTripSettingsModal: () => void
+  onSaveTripLinks: (payload: {
+    immich_album_id: string | null
+    vault_note_path: string | null
+  }) => Promise<void>
 }
 
 export const WorkspaceModals: React.FC<WorkspaceModalsProps> = (props) => (
@@ -194,6 +201,15 @@ export const WorkspaceModals: React.FC<WorkspaceModalsProps> = (props) => (
         isOffline={props.isOffline}
         onLoadPreview={props.onLoadChronosPreview}
         onSync={props.onSyncTripToChronos}
+      />
+    )}
+    {props.activeTrip && (
+      <TripSettingsModal
+        isOpen={props.tripSettingsModalOpen}
+        onClose={props.onCloseTripSettingsModal}
+        trip={props.activeTrip}
+        isOffline={props.isOffline}
+        onSave={props.onSaveTripLinks}
       />
     )}
   </>

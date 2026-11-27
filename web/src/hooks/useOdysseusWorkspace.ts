@@ -16,6 +16,7 @@ import type {
 import { useOfflineTripSync } from './useOfflineTripSync'
 import { useShareTokens } from './useShareTokens'
 import { useTripBudget } from './useTripBudget'
+import { useTripPhotos } from './useTripPhotos'
 import { buildWorkspaceActions } from './workspaceActions'
 
 export interface WorkspaceErrorState {
@@ -361,6 +362,14 @@ export function useOdysseusWorkspace(adapter: OdysseusApiAdapter, storage?: Offl
     adapter, selectedTripId: queries.selectedTripId, isOffline,
   })
   const budget = useTripBudget(adapter, queries.selectedTripId, isOffline, queries.workspaceVersion)
+  const tripPhotos = useTripPhotos({
+    adapter,
+    tripId: queries.selectedTripId,
+    companionMode: false,
+    isOffline,
+    immichAlbumId: queries.workspace?.trip.immich_album_id ?? null,
+    workspaceVersion: queries.workspaceVersion,
+  })
   const chronos = useChronosSyncActions({
     adapter, selectedTripId: queries.selectedTripId, isOffline, reloadWorkspace: queries.reloadWorkspace,
   })
@@ -382,12 +391,22 @@ export function useOdysseusWorkspace(adapter: OdysseusApiAdapter, storage?: Offl
     else await queries.reloadWorkspace(queries.selectedTripId)
   }, [queries.hydrateTrips, queries.reloadWorkspace, queries.selectedTripId])
 
+  const exportTripMarkdown = useCallback(async (): Promise<string> => {
+    mutations.assertOnline()
+    if (!queries.selectedTripId) {
+      throw new Error('Select a trip before exporting Markdown.')
+    }
+    return adapter.exportTripMarkdown(queries.selectedTripId)
+  }, [adapter, mutations, queries.selectedTripId])
+
   return {
     trips: queries.trips, selectedTripId: queries.selectedTripId, workspace: queries.workspace,
     unassignedBookings: queries.unassignedBookings,
     isLoading: queries.isLoading, isRefreshing: queries.isRefreshing, loadError: queries.loadError,
     actionError, isOffline, clearActionError: () => setActionError(null), selectTrip, refresh,
     budgetSummary: budget.budgetSummary, budgetLoading: budget.isLoading, budgetError: budget.budgetError, refreshBudget: budget.refreshBudget,
+    tripPhotos: tripPhotos.photosResponse, tripPhotosLoading: tripPhotos.isLoading, retryTripPhotos: tripPhotos.retry,
+    exportTripMarkdown,
     ...wave3, ...mutations, ...offline, ...shareTokens, ...chronos, ...inbound,
   }
 }

@@ -7,7 +7,9 @@ from app.adapters import (
     GeocoderAdapter,
     GoogleUrlResolverAdapter,
     HttpChronosClientAdapter,
+    HttpImmichClientAdapter,
     HttpPlutusClientAdapter,
+    ImmichClientAdapter,
     MapPackBuilderAdapter,
     OsrmRoutingAdapter,
     PhotonGeocoderAdapter,
@@ -58,6 +60,15 @@ def get_chronos_client_adapter(request: Request) -> ChronosClientAdapter:
     """Provide the configured Chronos HTTP client adapter."""
     resolved = get_app_settings(request)
     return HttpChronosClientAdapter(base_url=resolved.chronos_api_url)
+
+
+def get_immich_adapter(request: Request) -> ImmichClientAdapter:
+    """Provide the configured Immich HTTP client adapter."""
+    resolved = get_app_settings(request)
+    return HttpImmichClientAdapter(
+        base_url=resolved.immich_api_url,
+        api_key=resolved.immich_api_key,
+    )
 
 
 def get_share_rate_limiter(request: Request) -> InMemoryRateLimiter:

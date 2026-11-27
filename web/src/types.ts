@@ -432,6 +432,8 @@ export interface TripCreatePayload {
   end_date?: string | null
   home_timezone?: string
   budget_nzd?: number | null
+  immich_album_id?: string | null
+  vault_note_path?: string | null
   chronos_sync_enabled?: boolean
   chronos_overlay_mode?: ChronosOverlayMode
   summary?: string | null
@@ -445,6 +447,8 @@ export interface TripUpdatePayload {
   end_date?: string | null
   home_timezone?: string
   budget_nzd?: string | number | null
+  immich_album_id?: string | null
+  vault_note_path?: string | null
   chronos_sync_enabled?: boolean
   chronos_overlay_mode?: ChronosOverlayMode
   summary?: string | null
@@ -719,4 +723,34 @@ export interface SharedTripView {
   attachments: SharedAttachment[]
   places: Place[]
   route_estimates: RouteEstimate[]
+}
+
+export type ImmichPhotoStatus = 'available' | 'offline' | 'unconfigured'
+
+export type ImmichPhotoSource = 'album' | 'date_range' | 'none'
+
+export interface ImmichPhotoItem {
+  asset_id: string
+  original_filename: string | null
+  captured_at: string | null
+  local_date: string | null
+  thumbnail_url: string
+  web_url: string | null
+  thumbhash: string | null
+}
+
+export interface ImmichDayPhotos {
+  day_id: string
+  date: string
+  photos: ImmichPhotoItem[]
+}
+
+export interface TripPhotosResponse {
+  trip_id: string
+  status: ImmichPhotoStatus
+  source: ImmichPhotoSource
+  message: string | null
+  total_photos: number
+  days: ImmichDayPhotos[]
+  ungrouped_photos: ImmichPhotoItem[]
 }

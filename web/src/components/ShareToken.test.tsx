@@ -225,6 +225,8 @@ function makeMockAdapter(overrides?: Partial<OdysseusApiAdapter>): OdysseusApiAd
     deleteShareToken: vi.fn().mockResolvedValue(undefined),
     getSharedTrip: vi.fn().mockResolvedValue(makeSharedTripView()),
     sharedAttachmentContentUrl: (tok, attId) => `/api/share/${tok}/attachments/${attId}/content`,
+    getTripPhotos: noop,
+    exportTripMarkdown: noop,
     ...overrides,
   }
 }

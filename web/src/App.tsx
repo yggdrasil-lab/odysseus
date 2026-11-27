@@ -70,6 +70,7 @@ function useShellUiState() {
   const [offlineModalOpen, setOfflineModalOpen] = useState(false)
   const [shareModalOpen, setShareModalOpen] = useState(false)
   const [chronosModalOpen, setChronosModalOpen] = useState(false)
+  const [tripSettingsModalOpen, setTripSettingsModalOpen] = useState(false)
 
   return {
     mobileTab, setMobileTab, mapScope, setMapScope, mapLegId, setMapLegId, mapDayId, setMapDayId,
@@ -79,7 +80,7 @@ function useShellUiState() {
     viewingAttachment, setViewingAttachment, placeModalOpen, setPlaceModalOpen,
     editingPlace, setEditingPlace, initialPlaceCoords, setInitialPlaceCoords,
     offlineModalOpen, setOfflineModalOpen, shareModalOpen, setShareModalOpen,
-    chronosModalOpen, setChronosModalOpen,
+    chronosModalOpen, setChronosModalOpen, tripSettingsModalOpen, setTripSettingsModalOpen,
   }
 }
 
@@ -133,6 +134,8 @@ const AppModalsHost: React.FC<{
       onDeleteShareToken={state.deleteShareToken}
       chronosModalOpen={ui.chronosModalOpen} onCloseChronosModal={() => ui.setChronosModalOpen(false)}
       onLoadChronosPreview={state.loadChronosPreview} onSyncTripToChronos={state.syncTripToChronos}
+      tripSettingsModalOpen={ui.tripSettingsModalOpen} onCloseTripSettingsModal={() => ui.setTripSettingsModalOpen(false)}
+      onSaveTripLinks={state.updateTripLinks}
     />
   )
 }
@@ -250,6 +253,7 @@ const AuthorWorkspaceApp: React.FC<{
             mapDayId={ui.mapDayId || workspace.days[0]?.id || ''} onChangeMapDayId={ui.setMapDayId}
             onOpenNewTrip={() => ui.setTripModalOpen(true)} onOpenNewLeg={() => ui.setLegModalOpen(true)}
             onOpenNewItem={(dayId) => ui.setItemModalDayId(dayId)} onOpenChronosSync={() => ui.setChronosModalOpen(true)}
+            onOpenTripSettings={() => ui.setTripSettingsModalOpen(true)}
             onOpenNewChecklist={() => ui.setChecklistModalOpen(true)} onOpenNewNote={() => ui.setNoteModalOpen(true)}
             onOpenNewBooking={() => { ui.setEditingBooking(null); ui.setBookingModalOpen(true) }}
             onEditBooking={(b) => { ui.setEditingBooking(b); ui.setBookingModalOpen(true) }}

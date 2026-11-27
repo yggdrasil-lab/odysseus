@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.orm import Session
 
 from app.db import get_db
+from app.domain.markdown_export import render_trip_markdown
 from app.schemas import (
     DayCreate,
     DayRead,
@@ -62,6 +63,21 @@ def delete_trip(trip_id: uuid.UUID, db: Session = Depends(get_db)) -> Response:
 def get_trip_workspace(trip_id: uuid.UUID, db: Session = Depends(get_db)) -> TripWorkspaceRead:
     """Hydrate complete Variant A trip workspace."""
     return trip_service.get_trip_workspace(db, trip_id)
+
+
+@router.get("/{trip_id}/export/markdown")
+def export_trip_markdown(trip_id: uuid.UUID, db: Session = Depends(get_db)) -> Response:
+    """Render and download a one-way Obsidian Vault Markdown snapshot for a trip."""
+    workspace = trip_service.get_trip_workspace(db, trip_id)
+    markdown = render_trip_markdown(workspace)
+    return Response(
+        content=markdown,
+        media_type="text/markdown; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{workspace.trip.slug}.md"',
+            "Cache-Control": "no-store",
+        },
+    )
 
 
 @router.get("/{trip_id}/legs", response_model=list[LegRead])

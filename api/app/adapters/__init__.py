@@ -18,6 +18,12 @@ from app.adapters.geocoder import (
     ResolvedUrlPlace,
     UrlResolverAdapter,
 )
+from app.adapters.immich import (
+    HttpImmichClientAdapter,
+    ImmichAssetRecord,
+    ImmichClientAdapter,
+    ImmichThumbnailPayload,
+)
 from app.adapters.mappacks import MapPackBuilderAdapter, PmtilesCliAdapter
 from app.adapters.plutus import (
     HttpPlutusClientAdapter,
@@ -40,7 +46,11 @@ __all__ = [
     "GeocoderAdapter",
     "GoogleUrlResolverAdapter",
     "HttpChronosClientAdapter",
+    "HttpImmichClientAdapter",
     "HttpPlutusClientAdapter",
+    "ImmichAssetRecord",
+    "ImmichClientAdapter",
+    "ImmichThumbnailPayload",
     "MapPackBuilderAdapter",
     "OsrmRoutingAdapter",
     "PhotonGeocoderAdapter",
