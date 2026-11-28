@@ -3,7 +3,7 @@
 from typing import Any, Literal
 import uuid
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class InboundEmailAttachmentPayload(BaseModel):
@@ -35,6 +35,15 @@ class InboundEmailWebhookPayload(BaseModel):
     raw_excerpt: str | None = None
     jev_verdict: str | dict[str, Any] | None = None
     attachments: list[InboundEmailAttachmentPayload] = Field(default_factory=list)
+
+    @field_validator("email_id", mode="before")
+    @classmethod
+    def _coerce_email_id(cls, value: Any) -> Any:
+        if isinstance(value, bool):
+            raise ValueError("email_id must be a string or integer, not a boolean")
+        if isinstance(value, int):
+            return str(value)
+        return value
 
 
 class InboundEmailIngestResponse(BaseModel):

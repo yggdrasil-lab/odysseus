@@ -501,3 +501,46 @@ def test_inbound_date_matching_margin_ambiguity_and_assign_draft_confirm(
     ).json()
     bad_confirm = client.post(f"/trips/{trip_b['id']}/bookings/{cancelled['id']}/confirm")
     assert bad_confirm.status_code == 422
+
+
+def test_inbound_email_id_integer_coercion_and_validation(
+    env: tuple[TestClient, sessionmaker[Session]],
+) -> None:
+    """Verify Iris integer email_id values coerce to str while booleans return HTTP 422."""
+    client, session_factory = env
+    cases: list[tuple[int | str | None, str, str | None]] = [
+        (21, "<int-21@airline.example.com>", "21"),
+        (0, "<int-0@airline.example.com>", "0"),
+        ("iris-str-42", "<str-42@airline.example.com>", "iris-str-42"),
+        (None, "<none-id@airline.example.com>", None),
+    ]
+    for email_id, message_id, expected_ref in cases:
+        resp = client.post(
+            "/integrations/email",
+            json={
+                "email_id": email_id,
+                "message_id": message_id,
+                "from_address": "flight@airline.example.com",
+                "subject": "Flight Confirmation ABC123",
+                "text_body": "Itinerary confirmation ABC123.",
+            },
+            headers=_auth_headers(),
+        )
+        assert resp.status_code == 201, resp.text
+        booking_id = uuid.UUID(resp.json()["booking_id"])
+        with session_factory() as db:
+            booking = db.get(Booking, booking_id)
+            assert booking is not None
+            assert booking.source_reference == expected_ref
+
+    bool_resp = client.post(
+        "/integrations/email",
+        json={
+            "email_id": True,
+            "message_id": "<bool-id@airline.example.com>",
+            "from_address": "flight@airline.example.com",
+            "subject": "Invalid email_id",
+        },
+        headers=_auth_headers(),
+    )
+    assert bool_resp.status_code == 422
