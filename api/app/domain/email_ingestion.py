@@ -95,6 +95,15 @@ BOOKING_TYPE_KEYWORDS: tuple[tuple[BookingType, tuple[str, ...]], ...] = (
     ),
 )
 
+_BODY_BOOKING_TYPE_ORDER: tuple[BookingType, ...] = (
+    "flight",
+    "lodging",
+    "transport",
+    "insurance",
+    "activity",
+)
+_BOOKING_TYPE_KEYWORD_MAP: dict[BookingType, tuple[str, ...]] = dict(BOOKING_TYPE_KEYWORDS)
+
 CONFIRMATION_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(
         r"(?i:confirmation(?:\s+code|\s+number|\s+ref(?:erence)?)?|"
@@ -197,12 +206,25 @@ def sanitize_email_title(subject: str | None) -> str:
     return collapsed[:MAX_TITLE_LEN]
 
 
-def classify_booking_type(subject: str, body_text: str) -> BookingType:
-    """Classify email text into a canonical Odysseus BookingType using table-driven keywords."""
-    haystack = f"{subject}\n{body_text}".lower()
-    for booking_type, keywords in BOOKING_TYPE_KEYWORDS:
-        if any(keyword in haystack for keyword in keywords):
+def _match_booking_type(text: str, order: Sequence[BookingType]) -> BookingType | None:
+    """Return the first BookingType whose keywords match the lowercased text."""
+    lowered = text.lower()
+    for booking_type in order:
+        keywords = _BOOKING_TYPE_KEYWORD_MAP[booking_type]
+        if any(keyword in lowered for keyword in keywords):
             return booking_type
+    return None
+
+
+def classify_booking_type(subject: str, body_text: str) -> BookingType:
+    """Classify email text into a canonical Odysseus BookingType using subject-first matching."""
+    subject_order = tuple(booking_type for booking_type, _ in BOOKING_TYPE_KEYWORDS)
+    subject_match = _match_booking_type(subject, subject_order)
+    if subject_match is not None:
+        return subject_match
+    body_match = _match_booking_type(body_text, _BODY_BOOKING_TYPE_ORDER)
+    if body_match is not None:
+        return body_match
     return "activity"
 
 

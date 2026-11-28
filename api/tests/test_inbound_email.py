@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import Settings
 from app.db import get_db
+from app.domain.email_ingestion import classify_booking_type
 from app.main import create_app
 from app.models import Attachment, Booking
 
@@ -544,3 +545,82 @@ def test_inbound_email_id_integer_coercion_and_validation(
         headers=_auth_headers(),
     )
     assert bool_resp.status_code == 422
+
+
+def test_classify_booking_type_prioritizes_subject_and_body_flight_over_footer_insurance() -> None:
+    """Ensure flight itineraries with insurance footers stay flights while insurance emails stay insurance."""
+    assert (
+        classify_booking_type(
+            "Jetstar Flight Itinerary",
+            "Passenger Alex Tan. Flight departure at 09:00. Footer: Add travel insurance before takeoff.",
+        )
+        == "flight"
+    )
+    assert (
+        classify_booking_type(
+            "Tax Invoice",
+            "Booking Ref ABC123. Flight JQ201 AKL to MEL. Footer: Add travel insurance for peace of mind.",
+        )
+        == "flight"
+    )
+    assert (
+        classify_booking_type(
+            "Travel Insurance Policy",
+            "Policy number POL9988 covers flight delays and baggage loss.",
+        )
+        == "insurance"
+    )
+    assert (
+        classify_booking_type(
+            "World Nomads Travel Insurance - Flight Cover",
+            "Certificate of insurance for Alex Tan.",
+        )
+        == "insurance"
+    )
+
+
+def test_inbound_email_flight_with_insurance_footer_persists_flight_booking(
+    env: tuple[TestClient, sessionmaker[Session]],
+) -> None:
+    """Verify POST /integrations/email persists flight type when body footer mentions travel insurance."""
+    client, session_factory = env
+    cases: list[tuple[str, str, str, str, str]] = [
+        (
+            "<flight-itinerary-footer@airline.example.com>",
+            "flight@airline.example.com",
+            "Jetstar Flight Itinerary",
+            "Booking Ref ABC123 for Alex Tan. Add travel insurance before departure.",
+            "flight",
+        ),
+        (
+            "<flight-tax-invoice-footer@airline.example.com>",
+            "flight@airline.example.com",
+            "Tax Invoice",
+            "Flight summary PNR XYZ789. Need cover? Add travel insurance.",
+            "flight",
+        ),
+        (
+            "<insurance-policy-flight-cover@insurer.example.com>",
+            "insurance@insurer.example.com",
+            "Travel Insurance Policy",
+            "Policy POL9988 covers flight delays and medical emergencies.",
+            "insurance",
+        ),
+    ]
+    for message_id, from_addr, subject, text_body, expected_type in cases:
+        resp = client.post(
+            "/integrations/email",
+            json={
+                "message_id": message_id,
+                "from_address": from_addr,
+                "subject": subject,
+                "text_body": text_body,
+            },
+            headers=_auth_headers(),
+        )
+        assert resp.status_code == 201, resp.text
+        booking_id = uuid.UUID(resp.json()["booking_id"])
+        with session_factory() as db:
+            booking = db.get(Booking, booking_id)
+            assert booking is not None
+            assert booking.booking_type == expected_type
