@@ -26,7 +26,7 @@ interface SwGlobalScope {
 }
 
 const CACHE_PREFIX = 'odysseus-shell-'
-const CACHE_NAME = `${CACHE_PREFIX}v1`
+const CACHE_NAME = `${CACHE_PREFIX}v2`
 const sw = globalThis as unknown as SwGlobalScope
 
 function normalizeManifestUrls(entries: Array<ManifestEntry | string>): string[] {
@@ -47,7 +47,7 @@ async function precacheShell(urls: string[]): Promise<void> {
       const expectHtml = url === '/' || url.endsWith('.html')
       try {
         const res = await fetch(url, { redirect: 'manual', cache: 'reload', credentials: 'same-origin' })
-        if (isValidCacheableResponse(res, expectHtml)) {
+        if (isValidCacheableResponse(res, expectHtml, url)) {
           await cache.put(url, res)
         }
       } catch {
@@ -91,7 +91,7 @@ async function handleShellHtml(request: Request): Promise<Response> {
 async function handleStaticAsset(request: Request): Promise<Response> {
   const cache = await caches.open(CACHE_NAME)
   const cached = await cache.match(request)
-  if (cached && isValidCacheableResponse(cached, false)) {
+  if (cached && isValidCacheableResponse(cached, false, request.url)) {
     return cached
   }
   try {
@@ -100,7 +100,7 @@ async function handleStaticAsset(request: Request): Promise<Response> {
       redirect: 'manual',
       credentials: 'same-origin',
     })
-    if (isValidCacheableResponse(networkRes, false)) {
+    if (isValidCacheableResponse(networkRes, false, request.url)) {
       await cache.put(request, networkRes.clone())
       return networkRes
     }

@@ -43,7 +43,23 @@ export function classifySwRequest(
   return 'bypass'
 }
 
-export function isValidCacheableResponse(response: Response, expectHtml: boolean): boolean {
+const JS_SCRIPT_PATH_RE = /\.(?:m?js)$/i
+const JS_CONTENT_TYPE_RE = /(?:text|application)\/(?:javascript|ecmascript|x-javascript)/i
+
+function resolvePathname(urlOrPath: string): string {
+  if (!urlOrPath) return ''
+  try {
+    return new URL(urlOrPath, 'http://localhost').pathname
+  } catch {
+    return urlOrPath.split('?')[0].split('#')[0]
+  }
+}
+
+export function isValidCacheableResponse(
+  response: Response,
+  expectHtml: boolean,
+  requestUrl?: string,
+): boolean {
   if (response.status === 302 || response.type === 'opaqueredirect' || response.redirected) {
     return false
   }
@@ -57,6 +73,10 @@ export function isValidCacheableResponse(response: Response, expectHtml: boolean
     return false
   }
   if (expectHtml && contentType && !contentType.includes('text/html')) {
+    return false
+  }
+  const pathname = resolvePathname(requestUrl || url)
+  if (!expectHtml && JS_SCRIPT_PATH_RE.test(pathname) && !JS_CONTENT_TYPE_RE.test(contentType)) {
     return false
   }
   return true

@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('maplibre-gl', () => ({ default: { addProtocol: vi.fn() } }))
@@ -139,6 +142,29 @@ describe('swPolicy request and cache validation', () => {
     expect(isValidCacheableResponse({ status: 302, type: 'basic', redirected: false, ok: false, url: '', headers: new Headers() } as Response, true)).toBe(false)
     expect(isValidCacheableResponse({ status: 0, type: 'opaqueredirect', redirected: false, ok: false, url: '', headers: new Headers() } as Response, true)).toBe(false)
     expect(isValidCacheableResponse({ status: 200, type: 'basic', redirected: true, ok: true, url: 'https://auth/outpost.goauthentik.io/start', headers: new Headers({ 'content-type': 'text/html' }) } as Response, true)).toBe(false)
+  })
+
+  it('rejects .mjs and .js served as application/octet-stream or missing content-type and accepts javascript MIME types', () => {
+    const mjsUrl = 'https://odysseus.example.com/assets/pdf.worker.min-abc.mjs'
+    const jsUrl = '/assets/index-abc.js'
+    expect(isValidCacheableResponse(new Response('bin', { status: 200, headers: { 'content-type': 'application/octet-stream' } }), false, mjsUrl)).toBe(false)
+    expect(isValidCacheableResponse(new Response('bin', { status: 200 }), false, mjsUrl)).toBe(false)
+    expect(isValidCacheableResponse(new Response('bin', { status: 200, headers: { 'content-type': 'application/octet-stream' } }), false, jsUrl)).toBe(false)
+    expect(isValidCacheableResponse(new Response('bin', { status: 200 }), false, jsUrl)).toBe(false)
+    expect(isValidCacheableResponse(new Response('export {}', { status: 200, headers: { 'content-type': 'text/javascript; charset=utf-8' } }), false, mjsUrl)).toBe(true)
+    expect(isValidCacheableResponse(new Response('export {}', { status: 200, headers: { 'content-type': 'application/javascript' } }), false, mjsUrl)).toBe(true)
+    expect(isValidCacheableResponse({ status: 200, type: 'basic', redirected: false, ok: true, url: `${mjsUrl}?v=2`, headers: new Headers({ 'content-type': 'application/octet-stream' }) } as Response, false)).toBe(false)
+    expect(isValidCacheableResponse({ status: 200, type: 'basic', redirected: false, ok: true, url: `${mjsUrl}?v=2`, headers: new Headers({ 'content-type': 'text/javascript' }) } as Response, false)).toBe(true)
+  })
+
+  it('maps .mjs files to text/javascript in web/nginx.conf before /assets/', () => {
+    const testDir = dirname(fileURLToPath(import.meta.url))
+    const nginxConf = readFileSync(resolve(testDir, '../../nginx.conf'), 'utf8')
+    const mjsIndex = nginxConf.indexOf('location ~* \\.mjs$')
+    const assetsIndex = nginxConf.indexOf('location /assets/')
+    expect(mjsIndex).toBeGreaterThan(-1)
+    expect(assetsIndex).toBeGreaterThan(mjsIndex)
+    expect(nginxConf).toMatch(/location\s+~\*\s+\\\.mjs\$\s*\{[\s\S]*?default_type\s+text\/javascript;[\s\S]*?\}/)
   })
 })
 
