@@ -9,11 +9,24 @@ import { formatBytesCompact } from '../utils/maps'
 
 type ViewableAttachment = Attachment | SharedAttachment
 
+export function withWorkerCacheBuster(url: string): string {
+  const separator = url.includes('?') ? '&' : '?'
+  return `${url}${separator}v=2`
+}
+
 if (pdfjsLib.GlobalWorkerOptions) {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
+  pdfjsLib.GlobalWorkerOptions.workerSrc = withWorkerCacheBuster(pdfWorkerUrl)
 }
 
 let sharedPdfWorker: pdfjsLib.PDFWorker | null = null
+
+export function resetSharedPdfWorker(): void {
+  const worker = sharedPdfWorker
+  sharedPdfWorker = null
+  if (worker && typeof worker.destroy === 'function') {
+    void worker.destroy()
+  }
+}
 
 function getSharedPdfWorker(): pdfjsLib.PDFWorker | undefined {
   if (typeof pdfjsLib.PDFWorker !== 'function') return undefined
@@ -117,6 +130,9 @@ function usePdfDocumentLoader(options: {
           setPdfDoc(doc); setNumPages(doc.numPages)
         }
       } catch (err: unknown) {
+        if (isPdf && !controller.signal.aborted) {
+          resetSharedPdfWorker()
+        }
         if (!controller.signal.aborted && active) {
           setErrorMessage(err instanceof Error ? err.message : 'Unable to render document.')
         }

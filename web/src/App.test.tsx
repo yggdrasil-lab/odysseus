@@ -5,21 +5,34 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('maplibre-gl/dist/maplibre-gl.css', () => ({}))
 vi.mock('maplibre-gl', () => ({ default: { Map: vi.fn() } }))
 vi.mock('pdfjs-dist/build/pdf.worker.min.mjs?url', () => ({ default: '/mock-pdf.worker.mjs' }))
-vi.mock('pdfjs-dist', () => ({
-  GlobalWorkerOptions: { workerSrc: '' },
-  getDocument: () => ({
+const pdfMocks = vi.hoisted(() => {
+  const workerInstances: Array<{ destroy: ReturnType<typeof vi.fn> }> = []
+  const PDFWorker = vi.fn(function MockPdfWorker() {
+    const instance = { destroy: vi.fn().mockResolvedValue(undefined) }
+    workerInstances.push(instance)
+    return instance
+  })
+  const getDocument = vi.fn(() => ({
     promise: Promise.resolve({
       numPages: 1,
       getPage: async () => ({
         getViewport: () => ({ width: 320, height: 240 }),
-        render: () => ({ promise: Promise.resolve() }),
+        render: () => ({ promise: Promise.resolve(), cancel: () => {} }),
       }),
       destroy: async () => {},
     }),
-  }),
+  }))
+  return { workerInstances, PDFWorker, getDocument }
+})
+vi.mock('pdfjs-dist', () => ({
+  GlobalWorkerOptions: { workerSrc: '' },
+  PDFWorker: pdfMocks.PDFWorker,
+  getDocument: pdfMocks.getDocument,
 }))
 
+import * as pdfjsLib from 'pdfjs-dist'
 import { App } from './App'
+import { PdfViewerModal, resetSharedPdfWorker, withWorkerCacheBuster } from './components/PdfViewerModal'
 import { OdysseusApiError, type OdysseusApiAdapter } from './api/client'
 import { InMemoryOfflineStorageAdapter } from './offline/storage'
 import type {
@@ -1316,5 +1329,80 @@ describe('Ticket 11 Immich Photo Strip & One-Way Markdown Export', () => {
     expect(screen.getAllByTestId('vault-note-path-pill')[0]).toHaveTextContent(
       'second-brain/Areas/40-Leisure/Pacific Explorer.md',
     )
+  })
+
+  it('appends worker cache buster query param and configures pdfjsLib workerSrc', () => {
+    expect(withWorkerCacheBuster('/assets/pdf.worker.min.mjs')).toBe('/assets/pdf.worker.min.mjs?v=2')
+    expect(withWorkerCacheBuster('/assets/pdf.worker.min.mjs?hash=abc')).toBe('/assets/pdf.worker.min.mjs?hash=abc&v=2')
+    expect(pdfjsLib.GlobalWorkerOptions.workerSrc).toBe('/mock-pdf.worker.mjs?v=2')
+  })
+
+  it('destroys and resets sharedPdfWorker after a PDF render error so reopening initializes a fresh worker', async () => {
+    resetSharedPdfWorker()
+    pdfMocks.workerInstances.length = 0
+    pdfMocks.PDFWorker.mockClear()
+    pdfMocks.getDocument.mockClear()
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(
+      async () =>
+        new Response(new Uint8Array([0x25, 0x50, 0x44, 0x46]), {
+          status: 200,
+          headers: { 'content-type': 'application/pdf' },
+        }),
+    )
+    const getContextSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({} as CanvasRenderingContext2D)
+
+    pdfMocks.getDocument.mockImplementationOnce(() => ({
+      promise: Promise.reject(new Error('Failed to load PDF worker')),
+    }))
+
+    const pdfAttachment: Attachment = {
+      id: 'att-pdf-1',
+      trip_id: 'trip-1',
+      booking_id: null,
+      filename: 'boarding-pass.pdf',
+      mime_type: 'application/pdf',
+      size_bytes: 2048,
+      sha256: 'sha-pdf-1',
+      extracted_text: null,
+      created_at: '2027-01-01T00:00:00Z',
+    }
+
+    try {
+      const { rerender } = render(
+        <PdfViewerModal
+          attachment={pdfAttachment}
+          contentUrl="/api/trips/trip-1/attachments/att-pdf-1/content"
+          onClose={vi.fn()}
+        />,
+      )
+
+      expect(await screen.findByText('Failed to load PDF worker')).toBeInTheDocument()
+      expect(pdfMocks.PDFWorker).toHaveBeenCalledTimes(1)
+      expect(pdfMocks.workerInstances[0].destroy).toHaveBeenCalledTimes(1)
+
+      rerender(
+        <PdfViewerModal
+          attachment={null}
+          contentUrl=""
+          onClose={vi.fn()}
+        />,
+      )
+      rerender(
+        <PdfViewerModal
+          attachment={{ ...pdfAttachment }}
+          contentUrl="/api/trips/trip-1/attachments/att-pdf-1/content"
+          onClose={vi.fn()}
+        />,
+      )
+
+      expect(await screen.findByText('Page 1 / 1')).toBeInTheDocument()
+      expect(screen.queryByText('Failed to load PDF worker')).not.toBeInTheDocument()
+      expect(pdfMocks.PDFWorker).toHaveBeenCalledTimes(2)
+    } finally {
+      getContextSpy.mockRestore()
+      fetchSpy.mockRestore()
+      resetSharedPdfWorker()
+    }
   })
 })
